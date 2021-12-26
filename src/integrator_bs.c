@@ -644,9 +644,6 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     ri_bs->sequence        = malloc(sizeof(int)*sequence_length);
     ri_bs->costPerStep     = malloc(sizeof(int)*sequence_length);
     ri_bs->coeff           = malloc(sizeof(double*)*sequence_length);
-    for (int k = sequence_length; k < sequence_length; ++k) {
-        ri_bs->coeff[k] = NULL;
-    }
     ri_bs->costPerTimeUnit = malloc(sizeof(double)*sequence_length);
     ri_bs->optimalStep     = malloc(sizeof(double)*sequence_length);
 
