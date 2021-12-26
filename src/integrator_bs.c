@@ -630,6 +630,7 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
         ri_bs->y1Diag = NULL;
     }
     if (ri_bs->fk){
+        free(ri_bs->fk[0][0]);
         for (int k = 0; k < sequence_length; ++k) {
             for(int i = 1; i<ri_bs->sequence[k] + 1; i++){
                 free(ri_bs->fk[k][i]);
