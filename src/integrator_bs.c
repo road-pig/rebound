@@ -266,9 +266,8 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
 }
 
 static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, const int length){
-    ri_bs->y         = realloc(ri_bs->y, sizeof(double)*length);
-    ri_bs->y1        = realloc(ri_bs->y1, sizeof(double)*length);
-    ri_bs->y1Dot     = realloc(ri_bs->y1Dot, sizeof(double)*length);
+    ri_bs->y         = realloc(ri_bs->y, sizeof(double)*length);  // State at beginning of timestep
+    ri_bs->y1        = realloc(ri_bs->y1, sizeof(double)*length); // State at end of timestep
     // create some internal working arrays
     for (int k = 0; k < sequence_length - 1; ++k) {
         ri_bs->diagonal[k] = realloc(ri_bs->diagonal[k], sizeof(double)*length);
@@ -618,8 +617,6 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     ri_bs->y = NULL;
     free(ri_bs->y1);
     ri_bs->y1 = NULL;
-    free(ri_bs->y1Dot);
-    ri_bs->y1Dot = NULL;
     free(ri_bs->scale);
     ri_bs->scale = NULL;
     

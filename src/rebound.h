@@ -231,7 +231,6 @@ struct reb_simulation_integrator_bs {
     unsigned int allocatedN;
     double* y;
     double* y1;
-    double* y1Dot;
     double** diagonal;
     double** y1Diag;
     double* scale;
