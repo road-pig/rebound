@@ -65,7 +65,6 @@
 // Default configuration parameter. 
 // They are hard coded here because it
 // is unlikely that these need to be changed by the user.
-static const int mudif = 4; // Interpolation controll parameter
 static const int maxOrder = 18; 
 static const int sequence_length = maxOrder / 2; 
 static const double stepControl1 = 0.65;
@@ -80,7 +79,7 @@ static const int maxIter = 2; // maximal number of iterations for which checks a
 static const int maxChecks = 1; // maximal number of checks for each iteration
 
 
-static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double** const f, double* const yMiddle, double* const yEnd) {
+static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double** const f, double* const yEnd) {
 
     const int    n        = ri_bs->sequence[k];
     const double subStep  = step / n;
@@ -100,14 +99,6 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
     }
 
     for (int j = 1; j < n; ++j) {
-
-        if (2 * j == n) {
-            // save the point at the middle of the step
-            for (int i = 0; i < y0_length; ++i) {
-                yMiddle[i] = yEnd[i];
-            }
-        }
-
         t += subStep;
         for (int i = 0; i < y0_length; ++i) {
             const double middle = yEnd[i];
@@ -200,99 +191,6 @@ static double filterStep(struct reb_simulation_integrator_bs* ri_bs, const doubl
 }
 
 
-static double estimateError(struct reb_simulation_integrator_bs* ri_bs, const int length, double t0, const double* y0, const double* y0Dot, double t1, const double* y1, const double* y1Dot, const double* scale, const int mu, double** yMidDots) {
-    const int currentDegree = mu + 4;
-    double** polynomials   = malloc(sizeof(double*)*(currentDegree + 1)); 
-    for (int i = 0; i < currentDegree+1; ++i) {
-        polynomials[i] = malloc(sizeof(double)*length); 
-    }
-    // initialize the error factors array for interpolation
-    double* errfac = NULL;
-    if (currentDegree <= 4) {
-        errfac = NULL;
-    } else {
-        errfac = malloc(sizeof(double)*(currentDegree - 4)); 
-        for (int i = 0; i < currentDegree-4; ++i) {
-            const int ip5 = i + 5;
-            errfac[i] = 1.0 / (ip5 * ip5);
-            const double e = 0.5 * sqrt(((double) (i + 1)) / ip5);
-            for (int j = 0; j <= i; ++j) {
-                errfac[i] *= e / (j + 1);
-            }
-        }
-    }
-
-    // compute the interpolation coefficients
-    // computeCoefficients(mu);
-
-    const double h = t1 - t0;
-    for (int i = 0; i < length; ++i) {
-
-        const double yp0   = h * y0Dot[i];
-        const double yp1   = h * y1Dot[i];
-        const double ydiff = y1[i] - y0[i];
-        const double aspl  = ydiff - yp1;
-        const double bspl  = yp0 - ydiff;
-
-        polynomials[0][i] = y0[i];
-        polynomials[1][i] = ydiff;
-        polynomials[2][i] = aspl;
-        polynomials[3][i] = bspl;
-
-        if (mu < 0) {
-            break;
-        }
-
-        // compute the remaining coefficients
-        const double ph0 = 0.5 * (y0[i] + y1[i]) + 0.125 * (aspl + bspl);
-        polynomials[4][i] = 16 * (yMidDots[0][i] - ph0);
-
-        if (mu > 0) {
-            const double ph1 = ydiff + 0.25 * (aspl - bspl);
-            polynomials[5][i] = 16 * (yMidDots[1][i] - ph1);
-
-            if (mu > 1) {
-                const double ph2 = yp1 - yp0;
-                polynomials[6][i] = 16 * (yMidDots[2][i] - ph2 + polynomials[4][i]);
-
-                if (mu > 2) {
-                    const double ph3 = 6 * (bspl - aspl);
-                    polynomials[7][i] = 16 * (yMidDots[3][i] - ph3 + 3 * polynomials[5][i]);
-
-                    for (int j = 4; j <= mu; ++j) {
-                        const double fac1 = 0.5 * j * (j - 1);
-                        const double fac2 = 2 * fac1 * (j - 2) * (j - 3);
-                        polynomials[j+4][i] = 16 * (yMidDots[j][i] + fac1 * polynomials[j+2][i] - fac2 * polynomials[j][i]);
-                    }
-
-                }
-            }
-        }
-    }
-
-
-
-
-    double error = 0;
-    if (currentDegree >= 5) {
-        for (int i = 0; i < length; ++i) {
-            const double e = polynomials[currentDegree][i] / scale[i];
-            error += e * e;
-            //printf("error eeee %e\n",e);
-        }
-        error = sqrt(error / length) * errfac[currentDegree - 5];
-    }
-
-    for (int i = 0; i < currentDegree+1; ++i) {
-        free(polynomials[i]);
-    }
-    free(polynomials);
-    free(errfac);
-
-    return error;
-}
-
-
 static void combinded_derivatives(double* const yDot, const double* const y, double const t, void * ref){
     struct reb_simulation* const r = (struct reb_simulation* const)ref;
     for (int i=0; i<r->N; i++){
@@ -360,7 +258,6 @@ static void singleStep(struct reb_simulation_integrator_bs* ri_bs, const int fir
 
         // modified midpoint integration with the current substep
         if ( ! tryStep(ri_bs, ri_bs->state.t, ri_bs->y, y_length, stepSize, k, ri_bs->scale, ri_bs->fk[k],
-                    (k == 0) ? ri_bs->yMidDots[0] : ri_bs->diagonal[k - 1],
                     (k == 0) ? ri_bs->y1 : ri_bs->y1Diag[k - 1])) {
 
             // the stability check failed, we reduce the global step
@@ -607,10 +504,6 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
         ri_bs->diagonal[k] = NULL;
         ri_bs->y1Diag[k] = NULL;
     }
-    ri_bs->yMidDots = malloc(sizeof(double*)*(1 + 2 * sequence_length));
-    for (int k = 0; k < 1+2*sequence_length; ++k) {
-        ri_bs->yMidDots[k] = NULL;
-    }
     ri_bs->fk       = malloc(sizeof(double**)*sequence_length);
     for (int k = 0; k < sequence_length; ++k) {
         ri_bs->fk[k] = malloc(sizeof(double*)*(ri_bs->sequence[k] + 1));
@@ -637,12 +530,6 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
         for(int i=1; i<ri_bs->sequence[k] + 1; i++){
             ri_bs->fk[k][i] = realloc(ri_bs->fk[k][i], sizeof(double)*length);
         }
-    }
-
-    // scaled derivatives at the middle of the step $\tau$
-    // (element k is $h^{k} d^{k}y(\tau)/dt^{k}$ where h is step size...)
-    for (int k = 0; k < 1+2*sequence_length; ++k) {
-        ri_bs->yMidDots[k] = realloc(ri_bs->yMidDots[k], sizeof(double)*length);
     }
 
     ri_bs->scale = realloc(ri_bs->scale, sizeof(double)*length);
@@ -759,13 +646,6 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
         }
         free(ri_bs->y1Diag);
         ri_bs->y1Diag = NULL;
-    }
-    if (ri_bs->yMidDots){
-        for (int k = 0; k < 1+2*sequence_length; ++k) {
-            ri_bs->yMidDots[k] = NULL;
-        }
-        free(ri_bs->yMidDots);
-        ri_bs->yMidDots = NULL;
     }
     if (ri_bs->fk){
         for (int k = 0; k < sequence_length; ++k) {
