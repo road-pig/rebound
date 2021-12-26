@@ -159,13 +159,9 @@ static void extrapolate(double ** const coeff, const int k, double** const diag,
 //    return nextafter(x, INFINITY) - x;
 //}
 
-static double getTolerance(struct reb_simulation_integrator_bs* ri_bs, int i, double scale){
-    return ri_bs->scalAbsoluteTolerance + ri_bs->scalRelativeTolerance * scale;
-}
-
 static void rescale(struct reb_simulation_integrator_bs* ri_bs, double* const y1, double* const y2, double* const scale, int scale_length) {
     for (int i = 0; i < scale_length; ++i) {
-        scale[i] = getTolerance(ri_bs, i, MAX(fabs(y1[i]), fabs(y2[i])));  
+        scale[i] = ri_bs->scalAbsoluteTolerance + ri_bs->scalRelativeTolerance *MAX(fabs(y1[i]), fabs(y2[i]));
     }
 } 
 static double filterStep(struct reb_simulation_integrator_bs* ri_bs, const double h, const int forward, const int acceptSmall){
@@ -305,12 +301,11 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
     if (ri_bs->state.length>ri_bs->allocatedN){
         allocate_data_arrays(ri_bs, ri_bs->state.length);
         ri_bs->allocatedN = ri_bs->state.length;
-        ri_bs->firstStep = 1;
+        ri_bs->firstOrLastStep = 1;
     }
 
     rescale(ri_bs, ri_bs->state.y, ri_bs->state.y, ri_bs->scale, ri_bs->state.length); // initial scaling
 
-    const int firstOrLastStep = ri_bs->firstStep; // TODO cleanup
     // initial order selection
     const double tol    = ri_bs->scalRelativeTolerance;
     const double log10R = log10(MAX(1.0e-10, tol));
@@ -473,7 +468,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                             break;
 
                         default :
-                            if (firstOrLastStep && (error <= 1.0)) {
+                            if (ri_bs->firstOrLastStep && (error <= 1.0)) {
                                 loop = 0;
                             }
                             break;
@@ -548,7 +543,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         printf("Step rejected\n");
     } else {
         ri_bs->previousRejected = 0;
-        ri_bs->firstStep = 0;
+        ri_bs->firstOrLastStep = 0;
     }
 }
 
@@ -586,7 +581,7 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     ri_bs->state.ref    = r;
     ri_bs->hNew   = r->dt;
     if (r->status==REB_RUNNING_LAST_STEP){
-        ri_bs->firstStep = 1;
+        ri_bs->firstOrLastStep = 1;
     }
 
     // Generic integrator stuff
@@ -677,7 +672,7 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     ri_bs->scalRelativeTolerance= 1e-5;
     ri_bs->maxStep              = 10; // Note: always positive
     ri_bs->minStep              = 1e-5; // Note: always positive
-    ri_bs->firstStep            = 1;
+    ri_bs->firstOrLastStep      = 1;
     ri_bs->previousRejected     = 0;
         
 }
