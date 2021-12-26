@@ -275,12 +275,7 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
     }
 
     for (int k = 0; k < sequence_length; ++k) {
-        // Initial state
-        if (k==0){ 
-            ri_bs->fk[k][0] = realloc(ri_bs->fk[k][0], sizeof(double)*length);
-        }else{
-            ri_bs->fk[k][0] = ri_bs->fk[0][0];
-        }
+        ri_bs->fk[k][0] = k==0 ? realloc(ri_bs->fk[k][0], sizeof(double)*length) : ri_bs->fk[0][0]; // Initial state
         for(int i=1; i<ri_bs->sequence[k] + 1; i++){
             ri_bs->fk[k][i] = realloc(ri_bs->fk[k][i], sizeof(double)*length);
         }
