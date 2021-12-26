@@ -230,12 +230,10 @@ struct reb_simulation_integrator_bs {
     struct reb_ode_state state_user;
     unsigned int allocatedN;
     double* y;
-    double* y0Dot;  // derivate at initial time
     double* y1;
     double* y1Dot;
     double** diagonal;
     double** y1Diag;
-    double** yMidDots;
     double* scale;
     double*** fk;
     int* sequence;      // stepsize sequence

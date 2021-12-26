@@ -272,7 +272,6 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
 
 static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, const int length){
     ri_bs->y         = realloc(ri_bs->y, sizeof(double)*length);
-    ri_bs->y0Dot     = realloc(ri_bs->y0Dot, sizeof(double)*length);
     ri_bs->y1        = realloc(ri_bs->y1, sizeof(double)*length);
     ri_bs->y1Dot     = realloc(ri_bs->y1Dot, sizeof(double)*length);
     // create some internal working arrays
@@ -282,7 +281,12 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
     }
 
     for (int k = 0; k < sequence_length; ++k) {
-        // Note: memory at i=0 is shared with initial state (setup later)
+        // Initial state
+        if (k==0){ 
+            ri_bs->fk[k][0] = realloc(ri_bs->fk[k][0], sizeof(double)*length);
+        }else{
+            ri_bs->fk[k][0] = ri_bs->fk[0][0];
+        }
         for(int i=1; i<ri_bs->sequence[k] + 1; i++){
             ri_bs->fk[k][i] = realloc(ri_bs->fk[k][i], sizeof(double)*length);
         }
@@ -307,7 +311,6 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
     rescale(ri_bs, ri_bs->state.y, ri_bs->state.y, ri_bs->scale, ri_bs->state.length); // initial scaling
 
-    ri_bs->state.derivatives(ri_bs->y0Dot, ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
     const int firstOrLastStep = ri_bs->firstStep; // TODO cleanup
     // initial order selection
     const double tol    = ri_bs->scalRelativeTolerance;
@@ -325,11 +328,10 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         ri_bs->y[i] = ri_bs->state.y[i];
     }
 
-    for (int k = 0; k < sequence_length; ++k) {
-        // first evaluation, at the beginning of the step
-        // all sequences start from the same point, so we share the derivatives
-        ri_bs->fk[k][0] = ri_bs->y0Dot;
-    }
+
+    // first evaluation, at the beginning of the step
+    // all sequences start from the same point, so we share the derivatives (see setup routine for fk)
+    ri_bs->state.derivatives(ri_bs->fk[0][0], ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
 
     const double stepSize = ri_bs->hNew;
 
@@ -620,8 +622,6 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     // Free data array
     free(ri_bs->y);
     ri_bs->y = NULL;
-    free(ri_bs->y0Dot);
-    ri_bs->y0Dot = NULL;
     free(ri_bs->y1);
     ri_bs->y1 = NULL;
     free(ri_bs->y1Dot);
