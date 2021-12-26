@@ -162,6 +162,7 @@ static void extrapolate(double ** const coeff, const int k, double** const diag,
 static void rescale(struct reb_simulation_integrator_bs* ri_bs, double* const y1, double* const y2, double* const scale, int scale_length) {
     for (int i = 0; i < scale_length; ++i) {
         scale[i] = ri_bs->scalAbsoluteTolerance + ri_bs->scalRelativeTolerance *MAX(fabs(y1[i]), fabs(y2[i]));
+        scale[i] = ri_bs->scalAbsoluteTolerance + ri_bs->scalRelativeTolerance * 1.0; //TODO. This sets scale to 1 manually
     }
 } 
 static double filterStep(struct reb_simulation_integrator_bs* ri_bs, const double h, const int forward, const int acceptSmall){
@@ -323,7 +324,6 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
     const double stepSize = ri_bs->hNew;
 
-    const double nextT = ri_bs->state.t + stepSize;
 
     // iterate over several substep sizes
     int k = -1;
@@ -338,9 +338,8 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                     (k == 0) ? ri_bs->y1 : ri_bs->y1Diag[k - 1])) {
 
             // the stability check failed, we reduce the global step
-            printf("old step  %e\n",ri_bs->hNew);
+            printf("S"); //TODO
             ri_bs->hNew   = fabs(filterStep(ri_bs, stepSize * stabilityReduction, forward, 0));
-            printf("new step  %e\n",ri_bs->hNew);
             reject = 1;
             loop   = 0;
 
@@ -366,13 +365,11 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                     printf("Error. NaN appearing during integration.");
                     exit(0);
                 }
-                printf("(k=%d) error = %e\n",k, error);
 
                 if ((error > 1.0e15) || ((k > 1) && (error > maxError))) {
                     // error is too big, we reduce the global step
-                    printf("old step  %e\n",ri_bs->hNew);
+                    printf("R");  // TODO
                     ri_bs->hNew   = fabs(filterStep(ri_bs, stepSize * stabilityReduction, forward, 0));
-                    printf("new step  %e\n",ri_bs->hNew);
                     reject = 1;
                     loop   = 0;
                 } else {
@@ -414,9 +411,8 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                                                  orderControl1 * ri_bs->costPerTimeUnit[targetIter])) {
                                             --targetIter;
                                         }
-                                        printf("old step  %e\n",ri_bs->hNew);
                                         ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[targetIter], forward, 0);
-                                        printf("new step  %e\n",ri_bs->hNew);
+                                        printf("O"); // TODO
                                     }
                                 }
                             }
@@ -434,7 +430,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                                 if (error > ratio * ratio) {
                                     // we don't expect to converge on next iteration
                                     // we reject the step immediately
-                                    printf("rejected no conv expected\n");
+                                    printf("o"); // TODO
                                     reject = 1;
                                     loop = 0;
                                     if ((targetIter > 1) &&
@@ -449,7 +445,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
                         case 1 :
                             if (error > 1.0) {
-                                printf("rejected large error\n");
+                                printf("e"); // TODO
                                 reject = 1;
                                 if ((targetIter > 1) &&
                                         (ri_bs->costPerTimeUnit[targetIter - 1] <
@@ -468,7 +464,6 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                             break;
 
                     }
-
                 }
             }
         }
@@ -476,7 +471,8 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
 
     if (! reject) {
-        ri_bs->state.t = nextT;
+        printf("."); // TODO
+        ri_bs->state.t += stepSize;
         for (int i = 0; i < y_length; ++i) {
             ri_bs->state.y[i] = ri_bs->y1[i];
         }
@@ -534,7 +530,6 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
     if (reject) {
         ri_bs->previousRejected = 1;
-        printf("Step rejected\n");
     } else {
         ri_bs->previousRejected = 0;
         ri_bs->firstOrLastStep = 0;
