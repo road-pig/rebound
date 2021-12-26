@@ -78,7 +78,6 @@ static const double stabilityReduction = 0.5;
 static const int performStabilityCheck = 1;
 static const int maxIter = 2; // maximal number of iterations for which checks are performed
 static const int maxChecks = 1; // maximal number of checks for each iteration
-static const int useInterpolationError = 1; // use interpolation error in stepsize control
 
 
 static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double** const f, double* const yMiddle, double* const yEnd) {
@@ -158,7 +157,7 @@ static void extrapolate(double ** const coeff, const int offset, const int k, do
         }
     }
 
-    // update the last element
+    // update the last element (k==j)
     for (int i = 0; i < last_length; ++i) {
         // Aitken-Neville's recursive formula
         last[i] = diag[0][i] + coeff[k + offset][k - 1] * (diag[0][i] - last[i]);
@@ -501,72 +500,6 @@ static void singleStep(struct reb_simulation_integrator_bs* ri_bs, const int fir
         }
     }
 
-    // dense output handling
-    double hInt = ri_bs->maxStep;
-    if (! reject) {
-
-        // extrapolate state at middle point of the step
-        for (int j = 1; j <= k; ++j) {
-            extrapolate(ri_bs->coeff, 0, j, ri_bs->diagonal, ri_bs->yMidDots[0], y_length);
-        }
-
-        const int mu = 2 * k - mudif + 3;
-
-        for (int l = 0; l < mu; ++l) {
-
-            // derivative at middle point of the step
-            const int l2 = l / 2;
-            double factor = pow(0.5 * ri_bs->sequence[l2], l);
-            int fk_l2_length = ri_bs->sequence[l2] + 1;
-            int middleIndex = fk_l2_length / 2;
-            for (int i = 0; i < y_length; ++i) {
-                ri_bs->yMidDots[l + 1][i] = factor * ri_bs->fk[l2][middleIndex + l][i];
-            }
-            for (int j = 1; j <= k - l2; ++j) {
-                factor = pow(0.5 * ri_bs->sequence[j + l2], l);
-                int fk_l2j_length = ri_bs->sequence[l2+j] + 1;
-                middleIndex = fk_l2j_length / 2;
-                for (int i = 0; i < y_length; ++i) {
-                    ri_bs->diagonal[j - 1][i] = factor * ri_bs->fk[l2 + j][middleIndex + l][i];
-                }
-                extrapolate(ri_bs->coeff, l2, j, ri_bs->diagonal, ri_bs->yMidDots[l + 1], y_length);
-            }
-            for (int i = 0; i < y_length; ++i) {
-                ri_bs->yMidDots[l + 1][i] *= stepSize;
-            }
-
-            // compute centered differences to evaluate next derivatives
-            for (int j = (l + 1) / 2; j <= k; ++j) {
-                int fk_j_length = ri_bs->sequence[j] + 1;
-                for (int m = fk_j_length - 1; m >= 2 * (l + 1); --m) {
-                    for (int i = 0; i < y_length; ++i) {
-                        ri_bs->fk[j][m][i] -= ri_bs->fk[j][m - 2][i];
-                    }
-                }
-            }
-
-        }
-
-        // state at end of step
-        //ri_bs->finalState.t = nextT;
-        //ri_bs->finalState.y = ri_bs->y1;
-        //ri_bs->finalState.length = y_length;
-        ri_bs->state.derivatives(ri_bs->y1Dot, ri_bs->y1, nextT, ri_bs->state.ref);
-
-        if (mu >= 0 && useInterpolationError) {
-            // use the interpolation error to limit stepsize
-            const double interpError = estimateError(ri_bs, y_length, ri_bs->state.t, ri_bs->state.y, ri_bs->y0Dot,  nextT, ri_bs->y1, ri_bs->y1Dot, ri_bs->scale, mu, ri_bs->yMidDots);
-            hInt = fabs(stepSize / MAX(pow(interpError, 1.0 / (mu + 4)), 0.01));
-            if (interpError > 10.0) {
-                printf("old step  %e\n",ri_bs->hNew);
-                ri_bs->hNew   = filterStep(ri_bs, hInt, forward, 0);
-                printf("new step  %e\n",ri_bs->hNew);
-                printf("rejected large interpolation error\n");
-                reject = 1;
-            }
-        }
-
-    }
 
     if (! reject) {
         ri_bs->state.t = nextT;
@@ -621,7 +554,7 @@ static void singleStep(struct reb_simulation_integrator_bs* ri_bs, const int fir
         }
     }
 
-    ri_bs->hNew = MIN(ri_bs->hNew, hInt);
+    ri_bs->hNew = MIN(ri_bs->hNew, ri_bs->maxStep);
     if (! forward) {
         ri_bs->hNew = -ri_bs->hNew;
     }
