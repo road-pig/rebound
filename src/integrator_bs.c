@@ -138,21 +138,20 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
 
 }
 
-static void extrapolate(double ** const coeff, const int offset, const int k, double** const diag, double* const last, const int last_length) {
+static void extrapolate(double ** const coeff, const int k, double** const diag, double* const last, const int last_length) {
     // update the diagonal
     for (int j = 1; j < k; ++j) {
         for (int i = 0; i < last_length; ++i) {
             // Aitken-Neville's recursive formula
             diag[k - j - 1][i] = diag[k - j][i] +
-                coeff[k + offset][j - 1] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
+                coeff[k][j - 1] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
         }
     }
 
     // update the last element (k==j)
     for (int i = 0; i < last_length; ++i) {
         // Aitken-Neville's recursive formula
-        last[i] = diag[0][i] + coeff[k + offset][k - 1] * (diag[0][i] - last[i]);
-        //printf("last = %e\n", last[i]);
+        last[i] = diag[0][i] + coeff[k][k - 1] * (diag[0][i] - last[i]);
     }
 }
 
@@ -363,7 +362,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
                 // extrapolate the state at the end of the step
                 // using last iteration data
-                extrapolate(ri_bs->coeff, 0, k, ri_bs->y1Diag, ri_bs->y1, y_length);
+                extrapolate(ri_bs->coeff, k, ri_bs->y1Diag, ri_bs->y1, y_length);
                 rescale(ri_bs, ri_bs->y, ri_bs->y1, ri_bs->scale, y_length);
 
                 // estimate the error at the end of the step.
