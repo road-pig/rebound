@@ -148,20 +148,20 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
 
 }
 
-static void extrapolate(struct reb_simulation_integrator_bs* ri_bs, const int offset, const int k, double** const diag, double* const last, const int last_length) {
+static void extrapolate(double ** const coeff, const int offset, const int k, double** const diag, double* const last, const int last_length) {
     // update the diagonal
     for (int j = 1; j < k; ++j) {
         for (int i = 0; i < last_length; ++i) {
             // Aitken-Neville's recursive formula
             diag[k - j - 1][i] = diag[k - j][i] +
-                ri_bs->coeff[k + offset][j - 1] * (diag[k - j][i] - diag[k - j - 1][i]);
+                coeff[k + offset][j - 1] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
         }
     }
 
     // update the last element
     for (int i = 0; i < last_length; ++i) {
         // Aitken-Neville's recursive formula
-        last[i] = diag[0][i] + ri_bs->coeff[k + offset][k - 1] * (diag[0][i] - last[i]);
+        last[i] = diag[0][i] + coeff[k + offset][k - 1] * (diag[0][i] - last[i]);
         //printf("last = %e\n", last[i]);
     }
 }
@@ -378,7 +378,7 @@ static void singleStep(struct reb_simulation_integrator_bs* ri_bs, const int fir
 
                 // extrapolate the state at the end of the step
                 // using last iteration data
-                extrapolate(ri_bs, 0, k, ri_bs->y1Diag, ri_bs->y1, y_length);
+                extrapolate(ri_bs->coeff, 0, k, ri_bs->y1Diag, ri_bs->y1, y_length);
                 rescale(ri_bs, ri_bs->y, ri_bs->y1, ri_bs->scale, y_length);
 
                 // estimate the error at the end of the step.
@@ -507,7 +507,7 @@ static void singleStep(struct reb_simulation_integrator_bs* ri_bs, const int fir
 
         // extrapolate state at middle point of the step
         for (int j = 1; j <= k; ++j) {
-            extrapolate(ri_bs, 0, j, ri_bs->diagonal, ri_bs->yMidDots[0], y_length);
+            extrapolate(ri_bs->coeff, 0, j, ri_bs->diagonal, ri_bs->yMidDots[0], y_length);
         }
 
         const int mu = 2 * k - mudif + 3;
@@ -529,7 +529,7 @@ static void singleStep(struct reb_simulation_integrator_bs* ri_bs, const int fir
                 for (int i = 0; i < y_length; ++i) {
                     ri_bs->diagonal[j - 1][i] = factor * ri_bs->fk[l2 + j][middleIndex + l][i];
                 }
-                extrapolate(ri_bs, l2, j, ri_bs->diagonal, ri_bs->yMidDots[l + 1], y_length);
+                extrapolate(ri_bs->coeff, l2, j, ri_bs->diagonal, ri_bs->yMidDots[l + 1], y_length);
             }
             for (int i = 0; i < y_length; ++i) {
                 ri_bs->yMidDots[l + 1][i] *= stepSize;
@@ -660,11 +660,11 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     }
 
     // initialize the extrapolation tables
-    for (int k = 1; k < sequence_length; ++k) {
-        ri_bs->coeff[k] = malloc(sizeof(double)*k);
-        for (int l = 0; l < k; ++l) {
-            double ratio = ((double) ri_bs->sequence[k]) / ri_bs->sequence[k - l - 1];
-            ri_bs->coeff[k][l] = 1.0 / (ratio * ratio - 1.0);
+    for (int j = 1; j < sequence_length; ++j) {
+        ri_bs->coeff[j] = malloc(sizeof(double)*j);
+        for (int k = 1; k <= j; ++k) {
+            double ratio = ((double) ri_bs->sequence[j]) / ri_bs->sequence[j - k];
+            ri_bs->coeff[j][k-1] = 1.0 / (ratio * ratio - 1.0);
         }
     }
     // 1st dimension of data arrays depends only on sequence length
