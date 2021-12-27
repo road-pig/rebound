@@ -234,7 +234,7 @@ struct reb_simulation_integrator_bs {
     double** diagonal;
     double** y1Diag;
     double* scale;
-    double*** fk;
+    double* y0Dot;
     int* sequence;      // stepsize sequence
     int* costPerStep;   // overall cost of applying step reduction up to iteration k + 1, in number of calls.
     double* costPerTimeUnit; // cost per unit step.

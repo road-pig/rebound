@@ -79,7 +79,59 @@ static const int maxIter = 2; // maximal number of iterations for which checks a
 static const int maxChecks = 1; // maximal number of checks for each iteration
 
 
-static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double** const f, double* const yEnd) {
+static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double* const y0Dot, double* const yEnd) {
+    // LeapFrog
+    
+    double* const yDot = malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
+
+    const int    n        = ri_bs->sequence[k];
+    const double subStep  = step / n /2.;
+
+    // first substep
+    double t = t0 + subStep;
+    for (int i = 0; i < y0_length; ++i) {
+        if (i%6>2){ // Kick
+        yEnd[i] = y0[i] + 0.5*subStep * y0Dot[i];
+        }
+    }
+    
+    for (int i = 0; i < y0_length; ++i) {
+        if (i%6<3){ // Drift
+        yEnd[i] = y0[i] + subStep * yEnd[i+3];
+        }
+    }
+    ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
+
+    // other substeps
+    for (int j = 1; j < n; ++j) {
+        t += subStep;
+        for (int i = 0; i < y0_length; ++i) {
+            if (i%6>2){ // Kick
+            yEnd[i] = yEnd[i] + subStep * yDot[i];
+            }
+        }
+        
+        for (int i = 0; i < y0_length; ++i) {
+            if (i%6<3){ // Drift
+            yEnd[i] = yEnd[i] + subStep * yEnd[i+3];
+            }
+        }
+        ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
+    }
+
+    // correction of the last substep (at t0 + step)
+    for (int i = 0; i < y0_length; ++i) {
+        if (i%6>2){ // Kick
+        yEnd[i] = yEnd[i] + 0.5*subStep * yDot[i];
+        }
+    }
+
+    free(yDot);
+    return 1;
+
+}
+static int tryStepMid(struct reb_simulation_integrator_bs* ri_bs, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double* const y0Dot, double* const yEnd) {
+    // Modified Midpoint
 
     const int    n        = ri_bs->sequence[k];
     const double subStep  = step / n;
@@ -88,12 +140,14 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
     // first substep
     double t = t0 + subStep;
     for (int i = 0; i < y0_length; ++i) {
-        yEnd[i] = y0[i] + subStep * f[0][i];
+        yEnd[i] = y0[i] + subStep * y0Dot[i];
     }
-    ri_bs->state.derivatives(f[1], yEnd, t, ri_bs->state.ref);
 
     // other substeps
     double* const yTmp = malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
+    double* const yDot = malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
+    
+    ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
     for (int i = 0; i < y0_length; ++i) {
         yTmp[i] = y0[i];
     }
@@ -102,22 +156,22 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
         t += subStep;
         for (int i = 0; i < y0_length; ++i) {
             const double middle = yEnd[i];
-            yEnd[i]       = yTmp[i] + subStep2 * f[j][i];
+            yEnd[i]       = yTmp[i] + subStep2 * yDot[i];
             yTmp[i]       = middle;
         }
 
-        ri_bs->state.derivatives(f[j + 1], yEnd, t, ri_bs->state.ref);
+        ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
 
         // stability check
         if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
             double initialNorm = 0.0;
             for (int l = 0; l < y0_length; ++l) {
-                const double ratio = f[0][l] / scale[l];
+                const double ratio = y0Dot[l] / scale[l];
                 initialNorm += ratio * ratio;
             }
             double deltaNorm = 0.0;
             for (int l = 0; l < y0_length; ++l) {
-                const double ratio = (f[j + 1][l] - f[0][l]) / scale[l];
+                const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
                 deltaNorm += ratio * ratio;
             }
             //printf("iii   %e %e\n",initialNorm, deltaNorm);
@@ -130,10 +184,12 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
 
     // correction of the last substep (at t0 + step)
     for (int i = 0; i < y0_length; ++i) {
-        yEnd[i] = 0.5 * (yTmp[i] + yEnd[i] + subStep * f[n][i]);
+        yEnd[i] = 0.5 * (yTmp[i] + yEnd[i] + subStep * yDot[i]);
+        // = 0.25*(y_(2n-1) + 2*y_n(2) + y_(2n+1))     Eq (9.13c)
     }
 
     free(yTmp);
+    free(yDot);
     return 1;
 
 }
@@ -256,14 +312,6 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
         ri_bs->diagonal[k] = NULL;
         ri_bs->y1Diag[k] = NULL;
     }
-    ri_bs->fk       = malloc(sizeof(double**)*sequence_length);
-    for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->fk[k] = malloc(sizeof(double*)*(ri_bs->sequence[k] + 1));
-        for(int i=1; i<ri_bs->sequence[k] + 1; i++){
-            ri_bs->fk[k][i] = NULL;
-        }
-    }
-
 }
 
 static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, const int length){
@@ -275,12 +323,7 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
         ri_bs->y1Diag[k]   = realloc(ri_bs->y1Diag[k], sizeof(double)*length);
     }
 
-    for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->fk[k][0] = k==0 ? realloc(ri_bs->fk[k][0], sizeof(double)*length) : ri_bs->fk[0][0]; // Initial state
-        for(int i=1; i<ri_bs->sequence[k] + 1; i++){
-            ri_bs->fk[k][i] = realloc(ri_bs->fk[k][i], sizeof(double)*length);
-        }
-    }
+    ri_bs->y0Dot = realloc(ri_bs->y0Dot, sizeof(double)*length);
 
     ri_bs->scale = realloc(ri_bs->scale, sizeof(double)*length);
 
@@ -319,8 +362,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
 
     // first evaluation, at the beginning of the step
-    // all sequences start from the same point, so we share the derivatives (see setup routine for fk)
-    ri_bs->state.derivatives(ri_bs->fk[0][0], ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
+    ri_bs->state.derivatives(ri_bs->y0Dot, ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
 
     const double stepSize = ri_bs->hNew;
 
@@ -334,7 +376,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         //printf("loop k=%d\n",k);
 
         // modified midpoint integration with the current substep
-        if ( ! tryStep(ri_bs, ri_bs->state.t, ri_bs->y, y_length, stepSize, k, ri_bs->scale, ri_bs->fk[k],
+        if ( ! tryStep(ri_bs, ri_bs->state.t, ri_bs->y, y_length, stepSize, k, ri_bs->scale, ri_bs->y0Dot,
                     (k == 0) ? ri_bs->y1 : ri_bs->y1Diag[k - 1])) {
 
             // the stability check failed, we reduce the global step
@@ -624,16 +666,9 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
         free(ri_bs->y1Diag);
         ri_bs->y1Diag = NULL;
     }
-    if (ri_bs->fk){
-        free(ri_bs->fk[0][0]);
-        for (int k = 0; k < sequence_length; ++k) {
-            for(int i = 1; i<ri_bs->sequence[k] + 1; i++){
-                free(ri_bs->fk[k][i]);
-            }
-            free(ri_bs->fk[k]);
-        }
-        free(ri_bs->fk);
-        ri_bs->fk = NULL;
+    if (ri_bs->y0Dot){
+        free(ri_bs->y0Dot);
+        ri_bs->y0Dot = NULL;
     }
 
     // Free sequence arrays
@@ -659,7 +694,7 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     ri_bs->scalAbsoluteTolerance= 1e-5;
     ri_bs->scalRelativeTolerance= 1e-5;
     ri_bs->maxStep              = 10; // Note: always positive
-    ri_bs->minStep              = 1e-5; // Note: always positive
+    ri_bs->minStep              = 1e-8; // Note: always positive
     ri_bs->firstOrLastStep      = 1;
     ri_bs->previousRejected     = 0;
         
