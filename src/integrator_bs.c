@@ -85,7 +85,7 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
     double* const yDot = malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
 
     const int    n        = ri_bs->sequence[k];
-    const double subStep  = step / n /2.;
+    const double subStep  = step / n ;
 
     // first substep
     double t = t0 + subStep;
@@ -152,7 +152,7 @@ static int tryStepMid(struct reb_simulation_integrator_bs* ri_bs, const double t
         yTmp[i] = y0[i];
     }
 
-    for (int j = 1; j < n; ++j) {
+    for (int j = 1; j < n; ++j) {  // Note: iterating n substeps, not 2n substeps as in Eq. (9.13)
         t += subStep;
         for (int i = 0; i < y0_length; ++i) {
             const double middle = yEnd[i];
@@ -285,10 +285,15 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     ri_bs->costPerTimeUnit = malloc(sizeof(double)*sequence_length);
     ri_bs->optimalStep     = malloc(sizeof(double)*sequence_length);
 
-    // step size sequence: 2, 6, 10, 14, ...
-    for (int k = 0; k < sequence_length; ++k) {
+    // step size sequence: 2, 6, 10, 14, ...  // only needed for dense output
+     for (int k = 0; k < sequence_length; ++k) {
         ri_bs->sequence[k] = 4 * k + 2;
     }
+    
+    // step size sequence: 1,2,3,4,5 ...
+    //for (int k = 0; k < sequence_length; ++k) {
+    //    ri_bs->sequence[k] = 2*( k+1);
+    //}
 
     // initialize the order selection cost array
     // (number of function calls for each column of the extrapolation table)
