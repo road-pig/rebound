@@ -117,6 +117,23 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
             }
         }
         ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
+        // stability check
+        if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
+            double initialNorm = 0.0;
+            for (int l = 0; l < y0_length; ++l) {
+                const double ratio = y0Dot[l] / scale[l];
+                initialNorm += ratio * ratio;
+            }
+            double deltaNorm = 0.0;
+            for (int l = 0; l < y0_length; ++l) {
+                const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
+                deltaNorm += ratio * ratio;
+            }
+            //printf("iii   %e %e\n",initialNorm, deltaNorm);
+            if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
+                return 0;
+            }
+        }
     }
 
     // correction of the last substep (at t0 + step)
@@ -311,10 +328,8 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
         }
     }
     // 1st dimension of data arrays depends only on sequence length
-    ri_bs->diagonal = malloc(sizeof(double*)*(sequence_length - 1));
     ri_bs->y1Diag   = malloc(sizeof(double*)*(sequence_length - 1));
     for (int k = 0; k < sequence_length - 1; ++k) {
-        ri_bs->diagonal[k] = NULL;
         ri_bs->y1Diag[k] = NULL;
     }
 }
@@ -324,7 +339,6 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
     ri_bs->y1        = realloc(ri_bs->y1, sizeof(double)*length); // State at end of timestep
     // create some internal working arrays
     for (int k = 0; k < sequence_length - 1; ++k) {
-        ri_bs->diagonal[k] = realloc(ri_bs->diagonal[k], sizeof(double)*length);
         ri_bs->y1Diag[k]   = realloc(ri_bs->y1Diag[k], sizeof(double)*length);
     }
 
@@ -657,13 +671,6 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     free(ri_bs->scale);
     ri_bs->scale = NULL;
     
-    if (ri_bs->diagonal){
-        for (int k = 0; k < sequence_length - 1; ++k) {
-            ri_bs->diagonal[k] = NULL;
-        }
-        free(ri_bs->diagonal);
-        ri_bs->diagonal = NULL;
-    }
     if (ri_bs->y1Diag){
         for (int k = 0; k < sequence_length - 1; ++k) {
             ri_bs->y1Diag[k] = NULL;
