@@ -2079,7 +2079,7 @@ class reb_simulation_integrator_bs(Structure):
                 ("sequence", POINTER(c_int)),
                 ("costPerStep", POINTER(c_int)),
                 ("costPerTimeUnit", POINTER(c_double)),
-                ("optimalstep", POINTER(c_double)),
+                ("optimalStep", POINTER(c_double)),
                 ("coeff", POINTER(POINTER(c_double))),
                 ("scalAbsoluteTolerance", c_double),
                 ("scalRelativeTolerance", c_double),
@@ -2087,6 +2087,7 @@ class reb_simulation_integrator_bs(Structure):
                 ("maxStep", c_double),
                 ("firstOrLastStep", c_int),
                 ("previousRejected", c_int),
+                ("method", c_int),
                 ("hNew", c_double),
             ]               
 

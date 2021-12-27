@@ -245,6 +245,7 @@ struct reb_simulation_integrator_bs {
     double maxStep;
     int firstOrLastStep;
     int previousRejected;
+    int method;
     double hNew;
 
 
