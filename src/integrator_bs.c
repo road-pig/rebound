@@ -370,7 +370,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
     double  maxError                 = DBL_MAX;
 
-    const int forward = ri_bs->hNew >= 0.;
+    const int forward = (ri_bs->hNew >= 0.);
     int y_length = ri_bs->state.length;
     double error;
     int reject = 0;

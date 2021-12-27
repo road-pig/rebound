@@ -231,7 +231,6 @@ struct reb_simulation_integrator_bs {
     unsigned int allocatedN;
     double* y;
     double* y1;
-    double** diagonal;
     double** y1Diag;
     double* scale;
     double* y0Dot;
@@ -240,14 +239,12 @@ struct reb_simulation_integrator_bs {
     double* costPerTimeUnit; // cost per unit step.
     double* optimalStep; // optimal steps for each order. 
     double** coeff;    // extrapolation coefficients.
-    // StepsizeHelper
     double scalAbsoluteTolerance; // Allowed absolute scalar error.
     double scalRelativeTolerance; // Allowed relative scalar error.
     double minStep;
     double maxStep;
     int firstOrLastStep;
     int previousRejected;
-    // AbstractIntegrator
     double hNew;
 
 

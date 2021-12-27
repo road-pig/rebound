@@ -2053,13 +2053,41 @@ class reb_simulation_integrator_mercurius(Structure):
             self._Lfp = MERCURIUSLF(func)
             self._L = self._Lfp
 
+class reb_ode_state(Structure):
+    _fields_ = [
+                ("length", c_int),
+                ("t", c_double),
+                ("y", POINTER(c_double)),
+                ("derivatives", c_void_p),
+                ("ref", c_void_p),
+            ]               
+
 class reb_simulation_integrator_bs(Structure):
     """
     This class is an abstraction of the C-struct reb_simulation_integrator_bs.
     It controls the behaviour of the Gragg-Bulirsch-Stoer integrator.
     """
-
     _fields_ = [
+                ("state", reb_ode_state),
+                ("state_user", reb_ode_state),
+                ("allocatedN", c_uint),
+                ("y", POINTER(c_double)),
+                ("y1", POINTER(c_double)),
+                ("y1Diag", POINTER(POINTER(c_double))),
+                ("scale", POINTER(c_double)),
+                ("y0Dot", POINTER(c_double)),
+                ("sequence", POINTER(c_int)),
+                ("costPerStep", POINTER(c_int)),
+                ("costPerTimeUnit", POINTER(c_double)),
+                ("optimalstep", POINTER(c_double)),
+                ("coeff", POINTER(POINTER(c_double))),
+                ("scalAbsoluteTolerance", c_double),
+                ("scalRelativeTolerance", c_double),
+                ("minStep", c_double),
+                ("maxStep", c_double),
+                ("firstOrLastStep", c_int),
+                ("previousRejected", c_int),
+                ("hNew", c_double),
             ]               
 
 class timeval(Structure):
