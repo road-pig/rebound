@@ -209,20 +209,13 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
     return 0;
 }
 
-static void extrapolate(double ** const coeff, const int k, double** const diag, double* const last, const int last_length) {
+static void extrapolate(double ** const coeff, const int k, double** const diag, const int length) {
     // update the diagonal
-    for (int j = 1; j < k; ++j) {
-        for (int i = 0; i < last_length; ++i) {
+    for (int j = 0; j < k; ++j) {
+        for (int i = 0; i < length; ++i) {
             // Aitken-Neville's recursive formula
-            diag[k - j - 1][i] = diag[k - j][i] +
-                coeff[k][j - 1] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
+            diag[k - j - 1][i] = diag[k - j][i] + coeff[k][j] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
         }
-    }
-
-    // update the last element (k==j)
-    for (int i = 0; i < last_length; ++i) {
-        // Aitken-Neville's recursive formula
-        last[i] = diag[0][i] + coeff[k][k - 1] * (diag[0][i] - last[i]);
     }
 }
 
@@ -326,17 +319,16 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
         }
     }
     // 1st dimension of data arrays depends only on sequence length
-    ri_bs->y1Diag   = malloc(sizeof(double*)*(sequence_length - 1));
-    for (int k = 0; k < sequence_length - 1; ++k) {
+    ri_bs->y1Diag   = malloc(sizeof(double*)*(sequence_length));
+    for (int k = 0; k < sequence_length; ++k) {
         ri_bs->y1Diag[k] = NULL;
     }
 }
 
 static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, const int length){
     ri_bs->y         = realloc(ri_bs->y, sizeof(double)*length);  // State at beginning of timestep
-    ri_bs->y1        = realloc(ri_bs->y1, sizeof(double)*length); // State at end of timestep
     // create some internal working arrays
-    for (int k = 0; k < sequence_length - 1; ++k) {
+    for (int k = 0; k < sequence_length; ++k) {
         ri_bs->y1Diag[k]   = realloc(ri_bs->y1Diag[k], sizeof(double)*length);
     }
 
@@ -394,7 +386,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
         // modified midpoint integration with the current substep
         if ( ! tryStep(ri_bs, ri_bs->state.t, ri_bs->y, y_length, stepSize, k, ri_bs->scale, ri_bs->y0Dot,
-                    (k == 0) ? ri_bs->y1 : ri_bs->y1Diag[k - 1])) {
+                    ri_bs->y1Diag[k])) {
 
             // the stability check failed, we reduce the global step
             printf("S"); //TODO
@@ -409,14 +401,13 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
                 // extrapolate the state at the end of the step
                 // using last iteration data
-                extrapolate(ri_bs->coeff, k, ri_bs->y1Diag, ri_bs->y1, y_length);
-                rescale(ri_bs, ri_bs->y, ri_bs->y1, ri_bs->scale, y_length);
+                extrapolate(ri_bs->coeff, k, ri_bs->y1Diag, y_length);
+                rescale(ri_bs, ri_bs->y, ri_bs->y1Diag[0], ri_bs->scale, y_length);
 
                 // estimate the error at the end of the step.
                 error = 0;
                 for (int j = 0; j < y_length; ++j) {
-                    const double e = fabs(ri_bs->y1[j] - ri_bs->y1Diag[0][j]) / ri_bs->scale[j];
-                    //printf("error %e   %e\n",ri_bs->y1[j] , ri_bs->y1Diag[0][j]);
+                    const double e = (ri_bs->y1Diag[0][j] - ri_bs->y1Diag[1][j]) / ri_bs->scale[j];
                     error += e * e;
                 }
                 error = sqrt(error / y_length);
@@ -533,7 +524,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         printf("."); // TODO
         ri_bs->state.t += stepSize;
         for (int i = 0; i < y_length; ++i) {
-            ri_bs->state.y[i] = ri_bs->y1[i];
+            ri_bs->state.y[i] = ri_bs->y1Diag[0][i];
         }
 
         int optimalIter;
@@ -664,13 +655,11 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     // Free data array
     free(ri_bs->y);
     ri_bs->y = NULL;
-    free(ri_bs->y1);
-    ri_bs->y1 = NULL;
     free(ri_bs->scale);
     ri_bs->scale = NULL;
     
     if (ri_bs->y1Diag){
-        for (int k = 0; k < sequence_length - 1; ++k) {
+        for (int k = 0; k < sequence_length; ++k) {
             ri_bs->y1Diag[k] = NULL;
         }
         free(ri_bs->y1Diag);

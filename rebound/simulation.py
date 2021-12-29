@@ -2072,7 +2072,6 @@ class reb_simulation_integrator_bs(Structure):
                 ("state_user", reb_ode_state),
                 ("allocatedN", c_uint),
                 ("y", POINTER(c_double)),
-                ("y1", POINTER(c_double)),
                 ("y1Diag", POINTER(POINTER(c_double))),
                 ("scale", POINTER(c_double)),
                 ("y0Dot", POINTER(c_double)),
