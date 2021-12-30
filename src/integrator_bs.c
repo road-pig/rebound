@@ -65,7 +65,7 @@
 // Default configuration parameter. 
 // They are hard coded here because it
 // is unlikely that these need to be changed by the user.
-static const int maxOrder = 18; 
+static const int maxOrder = 18;// was 18 
 static const int sequence_length = maxOrder / 2; 
 static const double stepControl1 = 0.65;
 static const double stepControl2 = 0.94;
@@ -209,43 +209,45 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
     return 0;
 }
 
-static void extrapolate(double ** const coeff, const int k, double** const diag, double** const C, double** const D, const int length, const int* sequence) {
-    for (int j = 0; j <= k; ++j) {
-        double xi = pow(1./sequence[j],2.);
-        printf("x_%d   = %.4f\n",j, xi);
-    }
+static void extrapolate(double ** const coeff, const int k, double* const y1, double** const C, double** const D, const int length, const int* sequence) {
+ //   for (int j = 0; j <= k; ++j) {
+ //       double xi = pow(1./sequence[j],2.);
+ //       printf("x_%d   = %.14f\n",j, xi);
+ //   }
     for (int j = 0; j < k; ++j) {
-        double xi = pow(1./sequence[j],2.);
+        double xi = pow(1./sequence[k-j-1],2.);
         double xim1 = pow(1./sequence[k],2.);
         double facC = xi/(xi-xim1);
         double facD = xim1/(xi-xim1);
         for (int i = 0; i < length; ++i) {
-            if (i==6){
-                printf("C= %.4e     D= %.4e\n", C[k - j ][i], D[k - j -1][i]);
-            }
             double CD = C[k - j ][i] - D[k - j -1][i];
             C[k - j - 1][i] = facC * CD;
             D[k - j - 1][i] = facD * CD;
-            if (i==6){
-                printf("k=%d,   j=%d   %.4e\n",k,k-j-1,  D[k-j-1][i]);
-            }
+            //if (i==6){
+            //    printf("C_{%d,%d} = %.4e    %.8e\n",j+1,k-j,  C[k-j-1][i],facC);
+            //    printf("D_{%d,%d} = %.4e    %.8e\n",j+1,k-j,  D[k-j-1][i],facD);
+            //}
         }
     }
     // update the diagonal
-    for (int j = 0; j < k; ++j) {
-        for (int i = 0; i < length; ++i) {
-            // Aitken-Neville's recursive formula
-            diag[k - j - 1][i] = diag[k - j][i] + coeff[k][j] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
-        }
-    }
+//    for (int j = 0; j < k; ++j) {
+//        for (int i = 0; i < length; ++i) {
+//            // Aitken-Neville's recursive formula
+//            diag[k - j - 1][i] = diag[k - j][i] + coeff[k][j] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
+//        }
+//    }
     int i = 6;
     double ypred = 0;
-    for (int j = 0; j <= k; ++j) {
-            printf("    j=%d,   %.4e\n",j, D[j][i]);
-        ypred += D[j][i];
+    for (int i = 0; i < length; ++i) {
+        y1[i] = 0;
     }
-    printf("with Ds %.4e      y1Diag %.4e\n", ypred, diag[0][i]);
+    for (int j = 0; j <= k; ++j) {
+        for (int i = 0; i < length; ++i) {
+        y1[i] += D[j][i];
+        }
+    }
 
+//    if (k==2) exit(0);
 
 }
 
@@ -349,11 +351,9 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
         }
     }
     // 1st dimension of data arrays depends only on sequence length
-    ri_bs->y1Diag   = malloc(sizeof(double*)*(sequence_length));
     ri_bs->C   = malloc(sizeof(double*)*(sequence_length));
     ri_bs->D   = malloc(sizeof(double*)*(sequence_length));
     for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->y1Diag[k] = NULL;
         ri_bs->C[k] = NULL;
         ri_bs->D[k] = NULL;
     }
@@ -363,11 +363,11 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
     ri_bs->y         = realloc(ri_bs->y, sizeof(double)*length);  // State at beginning of timestep
     // create some internal working arrays
     for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->y1Diag[k]   = realloc(ri_bs->y1Diag[k], sizeof(double)*length);
         ri_bs->C[k]   = realloc(ri_bs->C[k], sizeof(double)*length);
         ri_bs->D[k]   = realloc(ri_bs->D[k], sizeof(double)*length);
     }
 
+    ri_bs->y1   = realloc(ri_bs->y1, sizeof(double)*length);
     ri_bs->y0Dot = realloc(ri_bs->y0Dot, sizeof(double)*length);
 
     ri_bs->scale = realloc(ri_bs->scale, sizeof(double)*length);
@@ -422,7 +422,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
         // modified midpoint integration with the current substep
         if ( ! tryStep(ri_bs, ri_bs->state.t, ri_bs->y, y_length, stepSize, k, ri_bs->scale, ri_bs->y0Dot,
-                    ri_bs->y1Diag[k])) {
+                    ri_bs->y1)) {
 
             // the stability check failed, we reduce the global step
             printf("S"); //TODO
@@ -432,9 +432,13 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
         } else {
             for (int i = 0; i < y_length; ++i) {
-                double CD = ri_bs->y1Diag[k][i];
+                double CD = ri_bs->y1[i];
                 ri_bs->C[k][i] = CD;
                 ri_bs->D[k][i] = CD;
+                //if (i==6){
+                //    printf("k=%d      y = %.8e\n",k,CD);
+                //}
+
             }
 
             // the substep was computed successfully
@@ -442,16 +446,17 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
                 // extrapolate the state at the end of the step
                 // using last iteration data
-                extrapolate(ri_bs->coeff, k, ri_bs->y1Diag, ri_bs->C, ri_bs->D, y_length, ri_bs->sequence);
-                rescale(ri_bs, ri_bs->y, ri_bs->y1Diag[0], ri_bs->scale, y_length);
+                extrapolate(ri_bs->coeff, k, ri_bs->y1, ri_bs->C, ri_bs->D, y_length, ri_bs->sequence);
+                rescale(ri_bs, ri_bs->y, ri_bs->y1, ri_bs->scale, y_length);
 
                 // estimate the error at the end of the step.
                 error = 0;
                 for (int j = 0; j < y_length; ++j) {
-                    const double e = (ri_bs->y1Diag[0][j] - ri_bs->y1Diag[1][j]) / ri_bs->scale[j];
+                    const double e = (ri_bs->C[0][j]) / ri_bs->scale[j];
                     error += e * e;
                 }
                 error = sqrt(error / y_length);
+                printf("eeror =%.8e\n",error);
                 if (isnan(error)) {
                     printf("Error. NaN appearing during integration.");
                     exit(0);
@@ -565,7 +570,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         printf("."); // TODO
         ri_bs->state.t += stepSize;
         for (int i = 0; i < y_length; ++i) {
-            ri_bs->state.y[i] = ri_bs->y1Diag[0][i];
+            ri_bs->state.y[i] = ri_bs->y1[i];
         }
 
         int optimalIter;
@@ -696,19 +701,18 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     // Free data array
     free(ri_bs->y);
     ri_bs->y = NULL;
+    free(ri_bs->y1);
+    ri_bs->y1 = NULL;
     free(ri_bs->scale);
     ri_bs->scale = NULL;
     
-    if (ri_bs->y1Diag){
+    if (ri_bs->C){
         for (int k = 0; k < sequence_length; ++k) {
-            ri_bs->y1Diag[k] = NULL;
             ri_bs->C[k] = NULL;
             ri_bs->D[k] = NULL;
         }
-        free(ri_bs->y1Diag);
         free(ri_bs->C);
         free(ri_bs->D);
-        ri_bs->y1Diag = NULL;
         ri_bs->C = NULL;
         ri_bs->D = NULL;
     }
