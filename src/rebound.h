@@ -231,7 +231,7 @@ struct reb_simulation_integrator_bs {
     unsigned int allocatedN;
     double* y;
     double* y1;
-    double** C;
+    double* C;
     double** D;
     double* scale;
     double* y0Dot;
@@ -239,7 +239,7 @@ struct reb_simulation_integrator_bs {
     int* costPerStep;   // overall cost of applying step reduction up to iteration k + 1, in number of calls.
     double* costPerTimeUnit; // cost per unit step.
     double* optimalStep; // optimal steps for each order. 
-    double** coeff;    // extrapolation coefficients.
+    double* coeff;    // extrapolation coefficients.
     double scalAbsoluteTolerance; // Allowed absolute scalar error.
     double scalRelativeTolerance; // Allowed relative scalar error.
     double minStep;

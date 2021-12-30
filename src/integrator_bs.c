@@ -209,35 +209,18 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
     return 0;
 }
 
-static void extrapolate(double ** const coeff, const int k, double* const y1, double** const C, double** const D, const int length, const int* sequence) {
- //   for (int j = 0; j <= k; ++j) {
- //       double xi = pow(1./sequence[j],2.);
- //       printf("x_%d   = %.14f\n",j, xi);
- //   }
+static void extrapolate(double * const coeff, const int k, double* const y1, double* const C, double** const D, const int length) {
     for (int j = 0; j < k; ++j) {
-        double xi = pow(1./sequence[k-j-1],2.);
-        double xim1 = pow(1./sequence[k],2.);
+        double xi = coeff[k-j-1];
+        double xim1 = coeff[k];
         double facC = xi/(xi-xim1);
         double facD = xim1/(xi-xim1);
         for (int i = 0; i < length; ++i) {
-            double CD = C[k - j ][i] - D[k - j -1][i];
-            C[k - j - 1][i] = facC * CD;
-            D[k - j - 1][i] = facD * CD;
-            //if (i==6){
-            //    printf("C_{%d,%d} = %.4e    %.8e\n",j+1,k-j,  C[k-j-1][i],facC);
-            //    printf("D_{%d,%d} = %.4e    %.8e\n",j+1,k-j,  D[k-j-1][i],facD);
-            //}
+            double CD = C[i] - D[k - j -1][i];
+            C[i] = facC * CD; // Only need to keep one C value
+            D[k - j - 1][i] = facD * CD; // Keep all D values for recursion
         }
     }
-    // update the diagonal
-//    for (int j = 0; j < k; ++j) {
-//        for (int i = 0; i < length; ++i) {
-//            // Aitken-Neville's recursive formula
-//            diag[k - j - 1][i] = diag[k - j][i] + coeff[k][j] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
-//        }
-//    }
-    int i = 6;
-    double ypred = 0;
     for (int i = 0; i < length; ++i) {
         y1[i] = 0;
     }
@@ -247,7 +230,6 @@ static void extrapolate(double ** const coeff, const int k, double* const y1, do
         }
     }
 
-//    if (k==2) exit(0);
 
 }
 
@@ -321,7 +303,7 @@ void reb_integrator_bs_part1(struct reb_simulation* r){
 static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs){
     ri_bs->sequence        = malloc(sizeof(int)*sequence_length);
     ri_bs->costPerStep     = malloc(sizeof(int)*sequence_length);
-    ri_bs->coeff           = malloc(sizeof(double*)*sequence_length);
+    ri_bs->coeff           = malloc(sizeof(double)*sequence_length);
     ri_bs->costPerTimeUnit = malloc(sizeof(double)*sequence_length);
     ri_bs->optimalStep     = malloc(sizeof(double)*sequence_length);
 
@@ -343,18 +325,13 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     }
 
     // initialize the extrapolation tables
-    for (int j = 1; j < sequence_length; ++j) {
-        ri_bs->coeff[j] = malloc(sizeof(double)*j);
-        for (int k = 1; k <= j; ++k) {
-            double ratio = ((double) ri_bs->sequence[j]) / ri_bs->sequence[j - k];
-            ri_bs->coeff[j][k-1] = 1.0 / (ratio * ratio - 1.0);
-        }
+    for (int j = 0; j < sequence_length; ++j) {
+        double r = 1./((double) ri_bs->sequence[j]);
+        ri_bs->coeff[j] = r*r;
     }
     // 1st dimension of data arrays depends only on sequence length
-    ri_bs->C   = malloc(sizeof(double*)*(sequence_length));
     ri_bs->D   = malloc(sizeof(double*)*(sequence_length));
     for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->C[k] = NULL;
         ri_bs->D[k] = NULL;
     }
 }
@@ -363,10 +340,10 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
     ri_bs->y         = realloc(ri_bs->y, sizeof(double)*length);  // State at beginning of timestep
     // create some internal working arrays
     for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->C[k]   = realloc(ri_bs->C[k], sizeof(double)*length);
         ri_bs->D[k]   = realloc(ri_bs->D[k], sizeof(double)*length);
     }
 
+    ri_bs->C   = realloc(ri_bs->C, sizeof(double)*length);
     ri_bs->y1   = realloc(ri_bs->y1, sizeof(double)*length);
     ri_bs->y0Dot = realloc(ri_bs->y0Dot, sizeof(double)*length);
 
@@ -433,7 +410,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         } else {
             for (int i = 0; i < y_length; ++i) {
                 double CD = ri_bs->y1[i];
-                ri_bs->C[k][i] = CD;
+                ri_bs->C[i] = CD;
                 ri_bs->D[k][i] = CD;
                 //if (i==6){
                 //    printf("k=%d      y = %.8e\n",k,CD);
@@ -446,13 +423,13 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
                 // extrapolate the state at the end of the step
                 // using last iteration data
-                extrapolate(ri_bs->coeff, k, ri_bs->y1, ri_bs->C, ri_bs->D, y_length, ri_bs->sequence);
+                extrapolate(ri_bs->coeff, k, ri_bs->y1, ri_bs->C, ri_bs->D, y_length);
                 rescale(ri_bs, ri_bs->y, ri_bs->y1, ri_bs->scale, y_length);
 
                 // estimate the error at the end of the step.
                 error = 0;
                 for (int j = 0; j < y_length; ++j) {
-                    const double e = (ri_bs->C[0][j]) / ri_bs->scale[j];
+                    const double e = (ri_bs->C[j]) / ri_bs->scale[j];
                     error += e * e;
                 }
                 error = sqrt(error / y_length);
@@ -703,17 +680,16 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     ri_bs->y = NULL;
     free(ri_bs->y1);
     ri_bs->y1 = NULL;
+    free(ri_bs->C);
+    ri_bs->C = NULL;
     free(ri_bs->scale);
     ri_bs->scale = NULL;
     
-    if (ri_bs->C){
+    if (ri_bs->D){
         for (int k = 0; k < sequence_length; ++k) {
-            ri_bs->C[k] = NULL;
             ri_bs->D[k] = NULL;
         }
-        free(ri_bs->C);
         free(ri_bs->D);
-        ri_bs->C = NULL;
         ri_bs->D = NULL;
     }
     if (ri_bs->y0Dot){
@@ -725,13 +701,8 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     free(ri_bs->sequence);
     ri_bs->sequence = NULL;
     
-    if (ri_bs->coeff){
-        for (int k = 1; k < sequence_length; ++k) {
-            free(ri_bs->coeff[k]);
-        }
-        free(ri_bs->coeff);
-        ri_bs->coeff = NULL;
-    }
+    free(ri_bs->coeff);
+    ri_bs->coeff = NULL;
     free(ri_bs->costPerStep);
     ri_bs->costPerStep = NULL;
     free(ri_bs->costPerTimeUnit);
