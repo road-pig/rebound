@@ -2073,6 +2073,8 @@ class reb_simulation_integrator_bs(Structure):
                 ("allocatedN", c_uint),
                 ("y", POINTER(c_double)),
                 ("y1Diag", POINTER(POINTER(c_double))),
+                ("C", POINTER(POINTER(c_double))),
+                ("D", POINTER(POINTER(c_double))),
                 ("scale", POINTER(c_double)),
                 ("y0Dot", POINTER(c_double)),
                 ("sequence", POINTER(c_int)),

@@ -231,6 +231,8 @@ struct reb_simulation_integrator_bs {
     unsigned int allocatedN;
     double* y;
     double** y1Diag;
+    double** C;
+    double** D;
     double* scale;
     double* y0Dot;
     int* sequence;      // stepsize sequence

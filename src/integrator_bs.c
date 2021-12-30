@@ -209,7 +209,28 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, 
     return 0;
 }
 
-static void extrapolate(double ** const coeff, const int k, double** const diag, const int length) {
+static void extrapolate(double ** const coeff, const int k, double** const diag, double** const C, double** const D, const int length, const int* sequence) {
+    for (int j = 0; j <= k; ++j) {
+        double xi = pow(1./sequence[j],2.);
+        printf("x_%d   = %.4f\n",j, xi);
+    }
+    for (int j = 0; j < k; ++j) {
+        double xi = pow(1./sequence[j],2.);
+        double xim1 = pow(1./sequence[k],2.);
+        double facC = xi/(xi-xim1);
+        double facD = xim1/(xi-xim1);
+        for (int i = 0; i < length; ++i) {
+            if (i==6){
+                printf("C= %.4e     D= %.4e\n", C[k - j ][i], D[k - j -1][i]);
+            }
+            double CD = C[k - j ][i] - D[k - j -1][i];
+            C[k - j - 1][i] = facC * CD;
+            D[k - j - 1][i] = facD * CD;
+            if (i==6){
+                printf("k=%d,   j=%d   %.4e\n",k,k-j-1,  D[k-j-1][i]);
+            }
+        }
+    }
     // update the diagonal
     for (int j = 0; j < k; ++j) {
         for (int i = 0; i < length; ++i) {
@@ -217,6 +238,15 @@ static void extrapolate(double ** const coeff, const int k, double** const diag,
             diag[k - j - 1][i] = diag[k - j][i] + coeff[k][j] * (diag[k - j][i] - diag[k - j - 1][i]);  // Eq.  (9.10). Note different indicies.
         }
     }
+    int i = 6;
+    double ypred = 0;
+    for (int j = 0; j <= k; ++j) {
+            printf("    j=%d,   %.4e\n",j, D[j][i]);
+        ypred += D[j][i];
+    }
+    printf("with Ds %.4e      y1Diag %.4e\n", ypred, diag[0][i]);
+
+
 }
 
 //double ulp(double x){
@@ -320,8 +350,12 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     }
     // 1st dimension of data arrays depends only on sequence length
     ri_bs->y1Diag   = malloc(sizeof(double*)*(sequence_length));
+    ri_bs->C   = malloc(sizeof(double*)*(sequence_length));
+    ri_bs->D   = malloc(sizeof(double*)*(sequence_length));
     for (int k = 0; k < sequence_length; ++k) {
         ri_bs->y1Diag[k] = NULL;
+        ri_bs->C[k] = NULL;
+        ri_bs->D[k] = NULL;
     }
 }
 
@@ -330,6 +364,8 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
     // create some internal working arrays
     for (int k = 0; k < sequence_length; ++k) {
         ri_bs->y1Diag[k]   = realloc(ri_bs->y1Diag[k], sizeof(double)*length);
+        ri_bs->C[k]   = realloc(ri_bs->C[k], sizeof(double)*length);
+        ri_bs->D[k]   = realloc(ri_bs->D[k], sizeof(double)*length);
     }
 
     ri_bs->y0Dot = realloc(ri_bs->y0Dot, sizeof(double)*length);
@@ -395,13 +431,18 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
             loop   = 0;
 
         } else {
+            for (int i = 0; i < y_length; ++i) {
+                double CD = ri_bs->y1Diag[k][i];
+                ri_bs->C[k][i] = CD;
+                ri_bs->D[k][i] = CD;
+            }
 
             // the substep was computed successfully
             if (k > 0) {
 
                 // extrapolate the state at the end of the step
                 // using last iteration data
-                extrapolate(ri_bs->coeff, k, ri_bs->y1Diag, y_length);
+                extrapolate(ri_bs->coeff, k, ri_bs->y1Diag, ri_bs->C, ri_bs->D, y_length, ri_bs->sequence);
                 rescale(ri_bs, ri_bs->y, ri_bs->y1Diag[0], ri_bs->scale, y_length);
 
                 // estimate the error at the end of the step.
@@ -661,9 +702,15 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     if (ri_bs->y1Diag){
         for (int k = 0; k < sequence_length; ++k) {
             ri_bs->y1Diag[k] = NULL;
+            ri_bs->C[k] = NULL;
+            ri_bs->D[k] = NULL;
         }
         free(ri_bs->y1Diag);
+        free(ri_bs->C);
+        free(ri_bs->D);
         ri_bs->y1Diag = NULL;
+        ri_bs->C = NULL;
+        ri_bs->D = NULL;
     }
     if (ri_bs->y0Dot){
         free(ri_bs->y0Dot);
