@@ -248,6 +248,7 @@ struct reb_simulation_integrator_bs {
     int previousRejected;
     int method;
     double hNew;
+    int targetIter;
 
 
 };
