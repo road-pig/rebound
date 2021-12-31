@@ -80,133 +80,139 @@ static const int maxChecks = 1; // maximal number of checks for each iteration
 
 
 static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double* const y0Dot, double* const yEnd) {
-    if (ri_bs->method == 0) { // LeapFrog
-        double* const yDot = malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
+    switch (ri_bs->method) {
+        case 0: // LeapFrog
+            {
 
-        const int    n        = ri_bs->sequence[k];
-        const double subStep  = step / n ;
+                const int    n        = ri_bs->sequence[k];
+                const double subStep  = step / n ;
 
-        // first substep
-        double t = t0 + subStep;
-        for (int i = 0; i < y0_length; ++i) {
-            if (i%6>2){ // Kick
-                yEnd[i] = y0[i] + 0.5*subStep * y0Dot[i];
-            }
-        }
-
-        for (int i = 0; i < y0_length; ++i) {
-            if (i%6<3){ // Drift
-                yEnd[i] = y0[i] + subStep * yEnd[i+3];
-            }
-        }
-        ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
-
-        // other substeps
-        for (int j = 1; j < n; ++j) {
-            t += subStep;
-            for (int i = 0; i < y0_length; ++i) {
-                if (i%6>2){ // Kick
-                    yEnd[i] = yEnd[i] + subStep * yDot[i];
+                // first substep
+                for (int i = 0; i < y0_length; ++i) {
+                    if (i%6<3){ // Drift
+                        yEnd[i] = y0[i] + 0.5*subStep * y0[i+3];
+                    }
                 }
-            }
+                double t = t0 + subStep;
+                ri_bs->state.derivatives(y0Dot, yEnd, t, ri_bs->state.ref);
+                for (int i = 0; i < y0_length; ++i) {
+                    if (i%6>2){ // Kick
+                        yEnd[i] = y0[i] + subStep * y0Dot[i];
+                    }
+                }
 
-            for (int i = 0; i < y0_length; ++i) {
-                if (i%6<3){ // Drift
-                    yEnd[i] = yEnd[i] + subStep * yEnd[i+3];
-                }
-            }
-            ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
-            // stability check
-            if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
-                double initialNorm = 0.0;
-                for (int l = 0; l < y0_length; ++l) {
-                    const double ratio = y0Dot[l] / scale[l];
-                    initialNorm += ratio * ratio;
-                }
-                double deltaNorm = 0.0;
-                for (int l = 0; l < y0_length; ++l) {
-                    const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
-                    deltaNorm += ratio * ratio;
-                }
-                //printf("iii   %e %e\n",initialNorm, deltaNorm);
-                if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
-                    return 0;
-                }
-            }
-        }
 
-        // correction of the last substep (at t0 + step)
-        for (int i = 0; i < y0_length; ++i) {
-            if (i%6>2){ // Kick
-                yEnd[i] = yEnd[i] + 0.5*subStep * yDot[i];
-            }
-        }
+                // other substeps
+                for (int j = 1; j < n; ++j) {
+                    t += subStep;
+                    for (int i = 0; i < y0_length; ++i) {
+                        if (i%6<3){ // Drift
+                            yEnd[i] = yEnd[i] + subStep * yEnd[i+3];
+                        }
+                    }
+                    ri_bs->state.derivatives(y0Dot, yEnd, t, ri_bs->state.ref);
+                    for (int i = 0; i < y0_length; ++i) {
+                        if (i%6>2){ // Kick
+                            yEnd[i] = yEnd[i] + subStep * y0Dot[i];
+                        }
+                    }
 
-        free(yDot);
-        return 1;
+                    // stability checki // TODO
+                    //if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
+                    //    double initialNorm = 0.0;
+                    //    for (int l = 0; l < y0_length; ++l) {
+                    //        const double ratio = y0Dot[l] / scale[l];
+                    //        initialNorm += ratio * ratio;
+                    //    }
+                    //    double deltaNorm = 0.0;
+                    //    for (int l = 0; l < y0_length; ++l) {
+                    //        const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
+                    //        deltaNorm += ratio * ratio;
+                    //    }
+                    //    //printf("iii   %e %e\n",initialNorm, deltaNorm);
+                    //    if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
+                    //        return 0;
+                    //    }
+                    //}
+                }
+
+                // correction of the last substep (at t0 + step)
+                for (int i = 0; i < y0_length; ++i) {
+                    if (i%6<3){ // Drift
+                        yEnd[i] = yEnd[i] + 0.5 * subStep * yEnd[i+3];
+                    }
+                }
+
+                return 1;
+            }
+        case 1: // Modified Midpoint
+            {
+
+                const int    n        = ri_bs->sequence[k];
+                const double subStep  = step / n;
+                const double subStep2 = 2 * subStep;
+
+                // first substep
+                double t = t0 + subStep;
+                for (int i = 0; i < y0_length; ++i) {
+                    yEnd[i] = y0[i] + subStep * y0Dot[i];
+                }
+
+                // other substeps
+                double* const yTmp = ri_bs->yTmp; // malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
+                double* const yDot = ri_bs->yDot; // malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
+
+                ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
+                for (int i = 0; i < y0_length; ++i) {
+                    yTmp[i] = y0[i];
+                }
+
+                for (int j = 1; j < n; ++j) {  // Note: iterating n substeps, not 2n substeps as in Eq. (9.13)
+                    t += subStep;
+                    for (int i = 0; i < y0_length; ++i) {
+                        const double middle = yEnd[i];
+                        yEnd[i]       = yTmp[i] + subStep2 * yDot[i];
+                        yTmp[i]       = middle;
+                    }
+
+                    ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
+
+                    // stability check
+                    if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
+                        double initialNorm = 0.0;
+                        for (int l = 0; l < y0_length; ++l) {
+                            const double ratio = y0Dot[l] / scale[l];
+                            initialNorm += ratio * ratio;
+                        }
+                        double deltaNorm = 0.0;
+                        for (int l = 0; l < y0_length; ++l) {
+                            const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
+                            deltaNorm += ratio * ratio;
+                        }
+                        //printf("iii   %e %e\n",initialNorm, deltaNorm);
+                        if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
+                            return 0;
+                        }
+                    }
+
+                }
+
+                // correction of the last substep (at t0 + step)
+                for (int i = 0; i < y0_length; ++i) {
+                    yEnd[i] = 0.5 * (yTmp[i] + yEnd[i] + subStep * yDot[i]);
+                    // = 0.25*(y_(2n-1) + 2*y_n(2) + y_(2n+1))     Eq (9.13c)
+                }
+
+                //free(yTmp);
+                //free(yDot);
+                return 1;
+            }
+            return 0;
+            break;
+        default:
+            printf("Error. method not implemented in BS\n");
+            exit(1);
     }
-    if (ri_bs->method ==1 ){ // Modified Midpoint
-
-        const int    n        = ri_bs->sequence[k];
-        const double subStep  = step / n;
-        const double subStep2 = 2 * subStep;
-
-        // first substep
-        double t = t0 + subStep;
-        for (int i = 0; i < y0_length; ++i) {
-            yEnd[i] = y0[i] + subStep * y0Dot[i];
-        }
-
-        // other substeps
-        double* const yTmp = malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
-        double* const yDot = malloc(sizeof(double)*y0_length); // IMPROVE: should allocate this only once
-
-        ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
-        for (int i = 0; i < y0_length; ++i) {
-            yTmp[i] = y0[i];
-        }
-
-        for (int j = 1; j < n; ++j) {  // Note: iterating n substeps, not 2n substeps as in Eq. (9.13)
-            t += subStep;
-            for (int i = 0; i < y0_length; ++i) {
-                const double middle = yEnd[i];
-                yEnd[i]       = yTmp[i] + subStep2 * yDot[i];
-                yTmp[i]       = middle;
-            }
-
-            ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
-
-            // stability check
-            if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
-                double initialNorm = 0.0;
-                for (int l = 0; l < y0_length; ++l) {
-                    const double ratio = y0Dot[l] / scale[l];
-                    initialNorm += ratio * ratio;
-                }
-                double deltaNorm = 0.0;
-                for (int l = 0; l < y0_length; ++l) {
-                    const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
-                    deltaNorm += ratio * ratio;
-                }
-                //printf("iii   %e %e\n",initialNorm, deltaNorm);
-                if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
-                    return 0;
-                }
-            }
-
-        }
-
-        // correction of the last substep (at t0 + step)
-        for (int i = 0; i < y0_length; ++i) {
-            yEnd[i] = 0.5 * (yTmp[i] + yEnd[i] + subStep * yDot[i]);
-            // = 0.25*(y_(2n-1) + 2*y_n(2) + y_(2n+1))     Eq (9.13c)
-        }
-
-        free(yTmp);
-        free(yDot);
-        return 1;
-    }
-    return 0;
 }
 
 static void extrapolate(double * const coeff, const int k, double* const y1, double* const C, double** const D, const int length) {
@@ -308,14 +314,14 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     ri_bs->optimalStep     = malloc(sizeof(double)*sequence_length);
 
     // step size sequence: 2, 6, 10, 14, ...  // only needed for dense output
-    // for (int k = 0; k < sequence_length; ++k) {
-    //    ri_bs->sequence[k] = 4 * k + 2;
-    //}
+     for (int k = 0; k < sequence_length; ++k) {
+        ri_bs->sequence[k] = 4 * k + 2;
+    }
     
     // step size sequence: 1,2,3,4,5 ...
-    for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->sequence[k] = 2*( k+1);
-    }
+    //for (int k = 0; k < sequence_length; ++k) {
+    //    ri_bs->sequence[k] = 2*( k+1);
+    //}
 
     // initialize the order selection cost array
     // (number of function calls for each column of the extrapolation table)
@@ -346,6 +352,8 @@ static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, con
     ri_bs->C   = realloc(ri_bs->C, sizeof(double)*length);
     ri_bs->y1   = realloc(ri_bs->y1, sizeof(double)*length);
     ri_bs->y0Dot = realloc(ri_bs->y0Dot, sizeof(double)*length);
+    ri_bs->yTmp = realloc(ri_bs->yTmp, sizeof(double)*length);
+    ri_bs->yDot = realloc(ri_bs->yDot, sizeof(double)*length);
 
     ri_bs->scale = realloc(ri_bs->scale, sizeof(double)*length);
 
@@ -386,7 +394,9 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
 
     // first evaluation, at the beginning of the step
-    ri_bs->state.derivatives(ri_bs->y0Dot, ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
+    if (ri_bs->method == 1){ // Note: only for midpoint. leapfrog calculates it itself
+        ri_bs->state.derivatives(ri_bs->y0Dot, ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
+    }
 
     const double stepSize = ri_bs->hNew;
     printf("step = %.7e    order== %d\n",stepSize, ri_bs->targetIter);
@@ -461,7 +471,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                     // check convergence
                     switch (k - ri_bs->targetIter) {
 
-                        case -1 :
+                        case -1 : // one before target
                             if ((ri_bs->targetIter > 1) && ! ri_bs->previousRejected) {
 
                                 // check if we can stop iterations now
@@ -482,7 +492,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                                         if ((ri_bs->targetIter > 1) &&
                                                 (ri_bs->costPerTimeUnit[ri_bs->targetIter - 1] <
                                                  orderControl1 * ri_bs->costPerTimeUnit[ri_bs->targetIter])) {
-                                            --ri_bs->targetIter;
+                                            ri_bs->targetIter -= 1;
                                         }
                                         ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[ri_bs->targetIter], forward, 0);
                                         printf("O"); // TODO
@@ -491,7 +501,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                             }
                             break;
 
-                        case 0:
+                        case 0: // exactly on target
                             if (error <= 1.0) {
                                 // convergence has been reached exactly at targetIter
                                 loop = 0;
@@ -516,7 +526,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                             }
                             break;
 
-                        case 1 :
+                        case 1 : // one past target
                             if (error > 1.0) {
                                 printf("e"); // TODO
                                 reject = 1;
@@ -556,14 +566,14 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
             if (ri_bs->previousRejected) {
                 optimalIter = 1;
             }
-        } else if (k <= ri_bs->targetIter) {
+        } else if (k <= ri_bs->targetIter) { // Converged before or on target
             optimalIter = k;
             if (ri_bs->costPerTimeUnit[k - 1] < orderControl1 * ri_bs->costPerTimeUnit[k]) {
                 optimalIter = k - 1;
             } else if (ri_bs->costPerTimeUnit[k] < orderControl2 * ri_bs->costPerTimeUnit[k - 1]) {
                 optimalIter = MIN(k + 1, sequence_length - 2);
             }
-        } else {
+        } else {                            // converged after target
             optimalIter = k - 1;
             if ((k > 2) && (ri_bs->costPerTimeUnit[k - 2] < orderControl1 * ri_bs->costPerTimeUnit[k - 1])) {
                 optimalIter = k - 2;
@@ -696,6 +706,14 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
         free(ri_bs->y0Dot);
         ri_bs->y0Dot = NULL;
     }
+    if (ri_bs->yTmp){
+        free(ri_bs->yTmp);
+        ri_bs->yTmp = NULL;
+    }
+    if (ri_bs->yDot){
+        free(ri_bs->yDot);
+        ri_bs->yDot = NULL;
+    }
 
     // Free sequence arrays
     free(ri_bs->sequence);
@@ -718,7 +736,7 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     ri_bs->minStep              = 1e-8; // Note: always positive
     ri_bs->firstOrLastStep      = 1;
     ri_bs->previousRejected     = 0;
-    ri_bs->method               = 0;
+    ri_bs->method               = 1;  // 1== midpoint
         
 }
 
