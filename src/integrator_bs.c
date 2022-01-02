@@ -586,7 +586,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         }
     }
 
-    ri_bs->hNew = MIN(ri_bs->hNew, ri_bs->maxStep);
+    ri_bs->hNew = filterStep(ri_bs, ri_bs->hNew);
     if (! forward) {
         ri_bs->hNew = -ri_bs->hNew;
     }
