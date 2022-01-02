@@ -78,11 +78,11 @@ static const int maxIter = 2; // maximal number of iterations for which checks a
 static const int maxChecks = 1; // maximal number of checks for each iteration
 
 
-static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const int n, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double* const y0Dot, double* const yEnd) {
+static int tryStep(struct reb_ode_state* state, const int n, const double t0, const double* y0, const int y0_length, const double step, const int k, const double* scale, double* const y0Dot, double* const yEnd, const int method) {
     const double subStep  = step / n;
     double t = t0;
 
-    switch (ri_bs->method) {
+    switch (method) {
         case 0: // LeapFrog
             {
                 // first substep
@@ -92,7 +92,7 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const int n, cons
                     }
                 }
                 t += 0.5*subStep;
-                ri_bs->state.derivatives(y0Dot, yEnd, t, ri_bs->state.ref);
+                state->derivatives(state, y0Dot, yEnd, t);
                 for (int i = 0; i < y0_length; ++i) {
                     if (i%6>2){ // Kick
                         yEnd[i] = y0[i] + subStep * y0Dot[i];
@@ -108,7 +108,7 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const int n, cons
                             yEnd[i] = yEnd[i] + subStep * yEnd[i+3];
                         }
                     }
-                    ri_bs->state.derivatives(y0Dot, yEnd, t, ri_bs->state.ref);
+                    state->derivatives(state, y0Dot, yEnd, t);
                     for (int i = 0; i < y0_length; ++i) {
                         if (i%6>2){ // Kick
                             yEnd[i] = yEnd[i] + subStep * y0Dot[i];
@@ -152,10 +152,10 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const int n, cons
                 }
 
                 // other substeps
-                double* const yTmp = ri_bs->yTmp; 
-                double* const yDot = ri_bs->yDot; 
+                double* const yTmp = state->yTmp; 
+                double* const yDot = state->yDot; 
 
-                ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
+                state->derivatives(state, yDot, yEnd, t);
                 for (int i = 0; i < y0_length; ++i) {
                     yTmp[i] = y0[i];
                 }
@@ -168,7 +168,7 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const int n, cons
                         yTmp[i]       = middle;
                     }
 
-                    ri_bs->state.derivatives(yDot, yEnd, t, ri_bs->state.ref);
+                    state->derivatives(state, yDot, yEnd, t);
 
                     // stability check
                     if (j <= maxChecks && k < maxIter) {
@@ -260,8 +260,8 @@ static double filterStep(struct reb_simulation_integrator_bs* ri_bs, const doubl
 }
 
 
-static void combinded_derivatives(double* const yDot, const double* const y, double const t, void * ref){
-    struct reb_simulation* const r = (struct reb_simulation* const)ref;
+static void nbody_derivatives(struct reb_ode_state* state, double* const yDot, const double* const y, double const t){
+    struct reb_simulation* const r = (struct reb_simulation* const)(state->ref);
     for (int i=0; i<r->N; i++){
          struct reb_particle* const p = &(r->particles[i]);
          p->x  = y[i*6+0];
@@ -282,11 +282,6 @@ static void combinded_derivatives(double* const yDot, const double* const y, dou
         yDot[i*6+4] = p.ay;
         yDot[i*6+5] = p.az;
     }
-    if (r->ri_bs.state_user.derivatives){
-        const int nbody_length = r->N*3*2;
-        r->ri_bs.state_user.derivatives(yDot+nbody_length, y+nbody_length, t, r->ri_bs.state_user.ref);
-    }
-
 }
 
 
@@ -318,34 +313,32 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     for (int k = 1; k < sequence_length; ++k) {
         ri_bs->costPerStep[k] = ri_bs->costPerStep[k - 1] + ri_bs->sequence[k];
     }
+    ri_bs->costPerTimeUnit[0]       = 0;
 
     // initialize the extrapolation tables
     for (int j = 0; j < sequence_length; ++j) {
         double r = 1./((double) ri_bs->sequence[j]);
         ri_bs->coeff[j] = r*r;
     }
-    // 1st dimension of data arrays depends only on sequence length
-    ri_bs->D   = malloc(sizeof(double*)*(sequence_length));
-    for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->D[k] = NULL;
-    }
 }
 
-static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, const int length){
+static void allocate_data_arrays(struct reb_ode_state* state){
+    const int length = state->length;
     // create some internal working arrays
+    
+    state->D   = malloc(sizeof(double*)*(sequence_length));
     for (int k = 0; k < sequence_length; ++k) {
-        ri_bs->D[k]   = realloc(ri_bs->D[k], sizeof(double)*length);
+        state->D[k]   = malloc(sizeof(double)*length);
     }
 
-    ri_bs->C     = realloc(ri_bs->C, sizeof(double)*length);
-    ri_bs->y1    = realloc(ri_bs->y1, sizeof(double)*length);
-    ri_bs->y0Dot = realloc(ri_bs->y0Dot, sizeof(double)*length);
-    ri_bs->yTmp  = realloc(ri_bs->yTmp, sizeof(double)*length);
-    ri_bs->yDot  = realloc(ri_bs->yDot, sizeof(double)*length);
+    state->C     = realloc(state->C, sizeof(double)*length);
+    state->y1    = realloc(state->y1, sizeof(double)*length);
+    state->y0Dot = realloc(state->y0Dot, sizeof(double)*length);
+    state->yTmp  = realloc(state->yTmp, sizeof(double)*length);
+    state->yDot  = realloc(state->yDot, sizeof(double)*length);
 
-    ri_bs->scale = realloc(ri_bs->scale, sizeof(double)*length);
+    state->scale = realloc(state->scale, sizeof(double)*length);
 
-    ri_bs->costPerTimeUnit[0]       = 0;
 }
 
 
@@ -354,13 +347,13 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         allocate_sequence_arrays(ri_bs);
     }
 
-    if (ri_bs->state.length>ri_bs->allocatedN){
-        allocate_data_arrays(ri_bs, ri_bs->state.length);
-        ri_bs->allocatedN = ri_bs->state.length;
+    if (ri_bs->state.length>ri_bs->state.allocatedN){
+        allocate_data_arrays(&(ri_bs->state));
+        ri_bs->state.allocatedN = ri_bs->state.length;
         ri_bs->firstOrLastStep = 1;
     }
 
-    rescale(ri_bs, ri_bs->state.y, ri_bs->state.y, ri_bs->scale, ri_bs->state.length); // initial scaling
+    rescale(ri_bs, ri_bs->state.y, ri_bs->state.y, ri_bs->state.scale, ri_bs->state.length); // initial scaling
 
     // initial order selection
     if (ri_bs->targetIter == 0){
@@ -378,7 +371,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
     // first evaluation, at the beginning of the step
     if (ri_bs->method == 1){ // Note: only for midpoint. leapfrog calculates it itself
-        ri_bs->state.derivatives(ri_bs->y0Dot, ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
+        ri_bs->state.derivatives(&(ri_bs->state), ri_bs->state.y0Dot, ri_bs->state.y, ri_bs->state.t);
     }
 
     const double stepSize = ri_bs->hNew;
@@ -392,8 +385,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         ++k;
         
         // modified midpoint integration with the current substep
-        if ( ! tryStep(ri_bs, ri_bs->sequence[k], ri_bs->state.t, ri_bs->state.y, y_length, stepSize, k, ri_bs->scale, ri_bs->y0Dot,
-                    ri_bs->y1)) {
+        if ( ! tryStep(&ri_bs->state, ri_bs->sequence[k], ri_bs->state.t, ri_bs->state.y, y_length, stepSize, k, ri_bs->state.scale, ri_bs->state.y0Dot, ri_bs->state.y1, ri_bs->method)) {
 
             // the stability check failed, we reduce the global step
             printf("S"); //TODO
@@ -403,9 +395,9 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
         } else {
             for (int i = 0; i < y_length; ++i) {
-                double CD = ri_bs->y1[i];
-                ri_bs->C[i] = CD;
-                ri_bs->D[k][i] = CD;
+                double CD = ri_bs->state.y1[i];
+                ri_bs->state.C[i] = CD;
+                ri_bs->state.D[k][i] = CD;
                 //if (i==6){
                 //    printf("k=%d      y = %.8e\n",k,CD);
                 //}
@@ -417,13 +409,13 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
                 // extrapolate the state at the end of the step
                 // using last iteration data
-                extrapolate(ri_bs->coeff, k, ri_bs->y1, ri_bs->C, ri_bs->D, y_length);
-                rescale(ri_bs, ri_bs->state.y, ri_bs->y1, ri_bs->scale, y_length);
+                extrapolate(ri_bs->coeff, k, ri_bs->state.y1, ri_bs->state.C, ri_bs->state.D, y_length);
+                rescale(ri_bs, ri_bs->state.y, ri_bs->state.y1, ri_bs->state.scale, y_length);
 
                 // estimate the error at the end of the step.
                 error = 0;
                 for (int j = 0; j < y_length; ++j) {
-                    const double e = (ri_bs->C[j]) / ri_bs->scale[j];
+                    const double e = (ri_bs->state.C[j]) / ri_bs->state.scale[j];
                     error = MAX(error, e * e);
                 }
                 //error = sqrt(error / y_length);
@@ -539,9 +531,10 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
     if (! reject) {
         printf("."); // TODO
         ri_bs->state.t += stepSize;
-        for (int i = 0; i < y_length; ++i) {
-            ri_bs->state.y[i] = ri_bs->y1[i];
-        }
+        // Swap arrays
+        double* y_tmp = ri_bs->state.y;
+        ri_bs->state.y = ri_bs->state.y1; 
+        ri_bs->state.y1 = y_tmp; 
 
         int optimalIter;
         if (k == 1) {
@@ -610,29 +603,26 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     // Setup state for combined N-body + user states
     ri_bs->state.t = r->t;
     int nbody_length = r->N*3*2;
-    int user_length = ri_bs->state_user.length;
-    ri_bs->state.length = nbody_length + user_length;
+    ri_bs->state.length = nbody_length;
     if (!ri_bs->state.y){
         ri_bs->state.y = malloc(sizeof(double)*ri_bs->state.length);
     }
-    double* const y = ri_bs->state.y;
 
-    for (int i=0; i<r->N; i++){
-        const struct reb_particle p = r->particles[i];
-        y[i*6+0] = p.x;
-        y[i*6+1] = p.y;
-        y[i*6+2] = p.z;
-        y[i*6+3] = p.vx;
-        y[i*6+4] = p.vy;
-        y[i*6+5] = p.vz;
+    {
+        double* const y = ri_bs->state.y;
+        for (int i=0; i<r->N; i++){
+            const struct reb_particle p = r->particles[i];
+            y[i*6+0] = p.x;
+            y[i*6+1] = p.y;
+            y[i*6+2] = p.z;
+            y[i*6+3] = p.vx;
+            y[i*6+4] = p.vy;
+            y[i*6+5] = p.vz;
+        }
     }
+
     
-    double* const user_y = ri_bs->state_user.y;
-    for (int i=0; i<user_length; i++){
-        y[nbody_length+i] = user_y[i];
-    }
-
-    ri_bs->state.derivatives  = combinded_derivatives;
+    ri_bs->state.derivatives  = nbody_derivatives;
     ri_bs->state.ref    = r;
     ri_bs->hNew   = r->dt;
     if (r->status==REB_RUNNING_LAST_STEP){
@@ -643,20 +633,20 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     reb_integrator_bs_step(ri_bs);
 
     // N-body specific:
-    for (int i=0; i<r->N; i++){
-         struct reb_particle* const p = &(r->particles[i]);
-         p->x  = y[i*6+0];
-         p->y  = y[i*6+1];
-         p->z  = y[i*6+2];
-         p->vx = y[i*6+3];
-         p->vy = y[i*6+4];
-         p->vz = y[i*6+5];
-    }
-    for (int i=0; i<user_length; i++){
-        user_y[i] = y[nbody_length+i];
+    {
+        double* const y = ri_bs->state.y; // y might have changed
+        for (int i=0; i<r->N; i++){
+            struct reb_particle* const p = &(r->particles[i]);
+            p->x  = y[i*6+0];
+            printf("%.5e\n",p->x);
+            p->y  = y[i*6+1];
+            p->z  = y[i*6+2];
+            p->vx = y[i*6+3];
+            p->vy = y[i*6+4];
+            p->vz = y[i*6+5];
+        }
     }
     r->t = ri_bs->state.t;
-    ri_bs->state_user.t = ri_bs->state.t;
     r->dt = ri_bs->hNew;
     r->dt_last_done = t_initial - r->t;
 }
@@ -669,31 +659,31 @@ void reb_integrator_bs_synchronize(struct reb_simulation* r){
 void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
 
     // Free data array
-    free(ri_bs->y1);
-    ri_bs->y1 = NULL;
-    free(ri_bs->C);
-    ri_bs->C = NULL;
-    free(ri_bs->scale);
-    ri_bs->scale = NULL;
+    free(ri_bs->state.y1);
+    ri_bs->state.y1 = NULL;
+    free(ri_bs->state.C);
+    ri_bs->state.C = NULL;
+    free(ri_bs->state.scale);
+    ri_bs->state.scale = NULL;
     
-    if (ri_bs->D){
+    if (ri_bs->state.D){
         for (int k = 0; k < sequence_length; ++k) {
-            ri_bs->D[k] = NULL;
+            ri_bs->state.D[k] = NULL;
         }
-        free(ri_bs->D);
-        ri_bs->D = NULL;
+        free(ri_bs->state.D);
+        ri_bs->state.D = NULL;
     }
-    if (ri_bs->y0Dot){
-        free(ri_bs->y0Dot);
-        ri_bs->y0Dot = NULL;
+    if (ri_bs->state.y0Dot){
+        free(ri_bs->state.y0Dot);
+        ri_bs->state.y0Dot = NULL;
     }
-    if (ri_bs->yTmp){
-        free(ri_bs->yTmp);
-        ri_bs->yTmp = NULL;
+    if (ri_bs->state.yTmp){
+        free(ri_bs->state.yTmp);
+        ri_bs->state.yTmp = NULL;
     }
-    if (ri_bs->yDot){
-        free(ri_bs->yDot);
-        ri_bs->yDot = NULL;
+    if (ri_bs->state.yDot){
+        free(ri_bs->state.yDot);
+        ri_bs->state.yDot = NULL;
     }
 
     // Free sequence arrays

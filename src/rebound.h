@@ -220,14 +220,8 @@ struct reb_ode_state{ // defines an ODE state
     int length; // number of components / dimenion
     double t;   // time
     double* y;  // state 
-    void (*derivatives)(double* const yDot, const double* const y, double const t, void * ref); // right hand side 
+    void (*derivatives)(struct reb_ode_state* state, double* const yDot, const double* const y, double const t); // right hand side 
     void* ref;  // pointer to any additional data needed for derivatives
-};
-
-
-struct reb_simulation_integrator_bs {
-    struct reb_ode_state state;  // combined state, nbody+user
-    struct reb_ode_state state_user;
     unsigned int allocatedN;
     double* y1;
     double* C;
@@ -236,6 +230,11 @@ struct reb_simulation_integrator_bs {
     double* y0Dot;
     double* yDot;
     double* yTmp;
+};
+
+
+struct reb_simulation_integrator_bs {
+    struct reb_ode_state state;  // combined state, nbody+user
     int* sequence;      // stepsize sequence
     int* costPerStep;   // overall cost of applying step reduction up to iteration k + 1, in number of calls.
     double* costPerTimeUnit; // cost per unit step.
