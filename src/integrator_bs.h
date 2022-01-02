@@ -29,5 +29,4 @@ void reb_integrator_bs_part2(struct reb_simulation* r);          ///< Internal f
 void reb_integrator_bs_synchronize(struct reb_simulation* r);    ///< Internal function used to call a specific integrator
 void reb_integrator_bs_reset(struct reb_simulation* r);          ///< Internal function used to call a specific integrator
 void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs);
-void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs);
 #endif

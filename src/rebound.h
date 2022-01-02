@@ -218,7 +218,6 @@ struct reb_simulation_integrator_whfast {
 
 struct reb_ode_state{ // defines an ODE state
     int length; // number of components / dimenion
-    double t;   // time
     double* y;  // state 
     void (*derivatives)(struct reb_ode_state* state, double* const yDot, const double* const y, double const t); // right hand side 
     void* ref;  // pointer to any additional data needed for derivatives
@@ -247,10 +246,7 @@ struct reb_simulation_integrator_bs {
     int firstOrLastStep;
     int previousRejected;
     int method;
-    double hNew;
     int targetIter;
-
-
 };
 
 enum REB_EOS_TYPE {
