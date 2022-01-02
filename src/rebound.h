@@ -218,17 +218,17 @@ struct reb_simulation_integrator_whfast {
 
 struct reb_ode_state{ // defines an ODE state
     int length; // number of components / dimenion
-    double* y;  // state 
     void (*derivatives)(struct reb_ode_state* state, double* const yDot, const double* const y, double const t); // right hand side 
     void* ref;  // pointer to any additional data needed for derivatives
     unsigned int allocatedN;
-    double* y1;
-    double* C;
-    double** D;
+    double* y;      // Current state 
     double* scale;
-    double* y0Dot;
-    double* yDot;
-    double* yTmp;
+    double* C;      // Temporary internal array (extrapolation) 
+    double** D;     // Temporary internal array (extrapolation) 
+    double* y1;     // Temporary internal array (state at end of step) 
+    double* y0Dot;  // Temporary internal array (derivatives at beginning of step)
+    double* yDot;   // Temporary internal array (derivatives)
+    double* yTmp;   // Temporary internal array (midpoint method)
 };
 
 

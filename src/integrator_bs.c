@@ -86,6 +86,9 @@ static int tryStep(struct reb_ode_state* state, const int k, const int n, const 
     const double* scale = state->scale;
     double* const y0Dot = state->y0Dot;
     double* const y1 = state->y1;
+    double* const yTmp = state->yTmp; 
+    double* const yDot = state->yDot; 
+
 
     switch (method) {
         case 0: // LeapFrog
@@ -97,10 +100,10 @@ static int tryStep(struct reb_ode_state* state, const int k, const int n, const 
                     }
                 }
                 t += 0.5*subStep;
-                state->derivatives(state, y0Dot, y1, t);
+                state->derivatives(state, yDot, y1, t);
                 for (int i = 0; i < length; ++i) {
                     if (i%6>2){ // Kick
-                        y1[i] = y0[i] + subStep * y0Dot[i];
+                        y1[i] = y0[i] + subStep * yDot[i];
                     }
                 }
 
@@ -113,10 +116,10 @@ static int tryStep(struct reb_ode_state* state, const int k, const int n, const 
                             y1[i] = y1[i] + subStep * y1[i+3];
                         }
                     }
-                    state->derivatives(state, y0Dot, y1, t);
+                    state->derivatives(state, yDot, y1, t);
                     for (int i = 0; i < length; ++i) {
                         if (i%6>2){ // Kick
-                            y1[i] = y1[i] + subStep * y0Dot[i];
+                            y1[i] = y1[i] + subStep * yDot[i];
                         }
                     }
 
@@ -157,9 +160,6 @@ static int tryStep(struct reb_ode_state* state, const int k, const int n, const 
                 }
 
                 // other substeps
-                double* const yTmp = state->yTmp; 
-                double* const yDot = state->yDot; 
-
                 state->derivatives(state, yDot, y1, t);
                 for (int i = 0; i < length; ++i) {
                     yTmp[i] = y0[i];
@@ -211,7 +211,7 @@ static int tryStep(struct reb_ode_state* state, const int k, const int n, const 
 
 static void extrapolate(const struct reb_ode_state* state, double * const coeff, const int k) {
     double* const y1 = state->y1;
-    double* const C = state->C;
+    double* const C = state->C;  // C and D values follow Numerical Recipes 
     double** const D =  state->D;
     double const length = state->length;
         for (int j = 0; j < k; ++j) {
