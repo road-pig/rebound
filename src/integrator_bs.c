@@ -226,20 +226,14 @@ static void extrapolate(const struct reb_ode_state* state, double * const coeff,
         }
     }
     for (int i = 0; i < length; ++i) {
-        y1[i] = 0;
+        y1[i] = D[0][i];
     }
-    for (int j = 0; j <= k; ++j) {
+    for (int j = 1; j <= k; ++j) {
         for (int i = 0; i < length; ++i) {
         y1[i] += D[j][i];
         }
     }
-
-
 }
-
-//double ulp(double x){
-//    return nextafter(x, INFINITY) - x;
-//}
 
 static void rescale(struct reb_simulation_integrator_bs* ri_bs, double* const y1, double* const y2, double* const scale, int scale_length) {
     for (int i = 0; i < scale_length; ++i) {
@@ -247,21 +241,23 @@ static void rescale(struct reb_simulation_integrator_bs* ri_bs, double* const y1
         scale[i] = ri_bs->scalAbsoluteTolerance + ri_bs->scalRelativeTolerance * 1.0; //TODO. This sets scale to 1 manually
     }
 } 
-static double filterStep(struct reb_simulation_integrator_bs* ri_bs, const double h, const int forward, const int acceptSmall){
-    double filteredH = h;
-    if (fabs(h) < ri_bs->minStep) {
-        if (acceptSmall) {
-            filteredH = forward ? ri_bs->minStep : -ri_bs->minStep;
-        } else {
-            printf("Error. Minimal stepsize reached during integration.");
+static double filterStep(struct reb_simulation_integrator_bs* ri_bs, const double h){
+    double filteredH = fabs(h);
+    
+    if (filteredH < ri_bs->minStep) {
+        filteredH = ri_bs->minStep;
+            printf("Error. Minimal stepsize reached during integration."); // TODO
             exit(0);
-        }
     }
 
-    if (filteredH > ri_bs->maxStep) {
+    if (filteredH > ri_bs->maxStep && ri_bs->maxStep>0.) {
         filteredH = ri_bs->maxStep;
-    } else if (filteredH < -ri_bs->maxStep) {
-        filteredH = -ri_bs->maxStep;
+            printf("Error. Maximum stepsize reached during integration."); // TODO
+            exit(0);
+    }
+
+    if (h<0.){
+        filteredH = - filteredH;
     }
 
     return filteredH;
@@ -398,7 +394,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
 
             // the stability check failed, we reduce the global step
             printf("S"); //TODO
-            ri_bs->hNew   = fabs(filterStep(ri_bs, stepSize * stabilityReduction, forward, 0));
+            ri_bs->hNew   = fabs(filterStep(ri_bs, stepSize * stabilityReduction));
             reject = 1;
             loop   = 0;
 
@@ -436,7 +432,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                 if ((error > 1.0e25)){ // TODO: Think about what to do when error increases: || ((k > 1) && (error > maxError))) {
                     // error is too big, we reduce the global step
                     printf("R (error= %.5e)",error);  // TODO
-                    ri_bs->hNew   = fabs(filterStep(ri_bs, stepSize * stabilityReduction, forward, 0));
+                    ri_bs->hNew   = fabs(filterStep(ri_bs, stepSize * stabilityReduction));
                     reject = 1;
                     loop   = 0;
                 } else {
@@ -448,8 +444,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                     double fac = stepControl2 / pow(error / stepControl1, exp);
                     const double power = pow(stepControl3, exp);
                     fac = MAX(power / stepControl4, MIN(1. / power, fac));
-                    const int acceptSmall = k < ri_bs->targetIter;
-                    ri_bs->optimalStep[k]     = fabs(filterStep(ri_bs, stepSize * fac, forward, acceptSmall));
+                    ri_bs->optimalStep[k]     = fabs(filterStep(ri_bs, stepSize * fac));
                     ri_bs->costPerTimeUnit[k] = ri_bs->costPerStep[k] / ri_bs->optimalStep[k];
 
                     // check convergence
@@ -478,7 +473,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                                                  orderControl1 * ri_bs->costPerTimeUnit[ri_bs->targetIter])) {
                                             ri_bs->targetIter -= 1;
                                         }
-                                        ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[ri_bs->targetIter], forward, 0);
+                                        ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[ri_bs->targetIter]);
                                         printf("O"); // TODO
                                     }
                                 }
@@ -505,7 +500,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                                              orderControl1 * ri_bs->costPerTimeUnit[ri_bs->targetIter])) {
                                         --ri_bs->targetIter;
                                     }
-                                    ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[ri_bs->targetIter], forward, 0);
+                                    ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[ri_bs->targetIter]);
                                 }
                             }
                             break;
@@ -519,7 +514,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                                          orderControl1 * ri_bs->costPerTimeUnit[ri_bs->targetIter])) {
                                     --ri_bs->targetIter;
                                 }
-                                ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[ri_bs->targetIter], forward, 0);
+                                ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[ri_bs->targetIter]);
                             }
                             loop = 0;
                             break;
@@ -576,13 +571,13 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         } else {
             // stepsize control
             if (optimalIter <= k) {
-                ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[optimalIter], forward, 0);
+                ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[optimalIter]);
             } else {
                 if ((k < ri_bs->targetIter) &&
                         (ri_bs->costPerTimeUnit[k] < orderControl2 * ri_bs->costPerTimeUnit[k - 1])) {
-                    ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter + 1] / ri_bs->costPerStep[k], forward, 0);
+                    ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter + 1] / ri_bs->costPerStep[k]);
                 } else {
-                    ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter] / ri_bs->costPerStep[k], forward, 0);
+                    ri_bs->hNew = filterStep(ri_bs, ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter] / ri_bs->costPerStep[k]);
                 }
             }
 
