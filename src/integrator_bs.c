@@ -182,7 +182,6 @@ static int tryStep(struct reb_simulation_integrator_bs* ri_bs, const int n, cons
                             const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
                             deltaNorm += ratio * ratio;
                         }
-                        //printf("iii   %e %e\n",initialNorm, deltaNorm);
                         if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
                             return 0;
                         }
@@ -333,17 +332,16 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
 }
 
 static void allocate_data_arrays(struct reb_simulation_integrator_bs* ri_bs, const int length){
-    ri_bs->y         = realloc(ri_bs->y, sizeof(double)*length);  // State at beginning of timestep
     // create some internal working arrays
     for (int k = 0; k < sequence_length; ++k) {
         ri_bs->D[k]   = realloc(ri_bs->D[k], sizeof(double)*length);
     }
 
-    ri_bs->C   = realloc(ri_bs->C, sizeof(double)*length);
-    ri_bs->y1   = realloc(ri_bs->y1, sizeof(double)*length);
+    ri_bs->C     = realloc(ri_bs->C, sizeof(double)*length);
+    ri_bs->y1    = realloc(ri_bs->y1, sizeof(double)*length);
     ri_bs->y0Dot = realloc(ri_bs->y0Dot, sizeof(double)*length);
-    ri_bs->yTmp = realloc(ri_bs->yTmp, sizeof(double)*length);
-    ri_bs->yDot = realloc(ri_bs->yDot, sizeof(double)*length);
+    ri_bs->yTmp  = realloc(ri_bs->yTmp, sizeof(double)*length);
+    ri_bs->yDot  = realloc(ri_bs->yDot, sizeof(double)*length);
 
     ri_bs->scale = realloc(ri_bs->scale, sizeof(double)*length);
 
@@ -378,11 +376,6 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
     double error;
     int reject = 0;
 
-    for (int i=0; i<y_length; i++){
-        ri_bs->y[i] = ri_bs->state.y[i];
-    }
-
-
     // first evaluation, at the beginning of the step
     if (ri_bs->method == 1){ // Note: only for midpoint. leapfrog calculates it itself
         ri_bs->state.derivatives(ri_bs->y0Dot, ri_bs->state.y, ri_bs->state.t, ri_bs->state.ref);
@@ -399,7 +392,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
         ++k;
         
         // modified midpoint integration with the current substep
-        if ( ! tryStep(ri_bs, ri_bs->sequence[k], ri_bs->state.t, ri_bs->y, y_length, stepSize, k, ri_bs->scale, ri_bs->y0Dot,
+        if ( ! tryStep(ri_bs, ri_bs->sequence[k], ri_bs->state.t, ri_bs->state.y, y_length, stepSize, k, ri_bs->scale, ri_bs->y0Dot,
                     ri_bs->y1)) {
 
             // the stability check failed, we reduce the global step
@@ -425,7 +418,7 @@ void reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs){
                 // extrapolate the state at the end of the step
                 // using last iteration data
                 extrapolate(ri_bs->coeff, k, ri_bs->y1, ri_bs->C, ri_bs->D, y_length);
-                rescale(ri_bs, ri_bs->y, ri_bs->y1, ri_bs->scale, y_length);
+                rescale(ri_bs, ri_bs->state.y, ri_bs->y1, ri_bs->scale, y_length);
 
                 // estimate the error at the end of the step.
                 error = 0;
@@ -676,8 +669,6 @@ void reb_integrator_bs_synchronize(struct reb_simulation* r){
 void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
 
     // Free data array
-    free(ri_bs->y);
-    ri_bs->y = NULL;
     free(ri_bs->y1);
     ri_bs->y1 = NULL;
     free(ri_bs->C);

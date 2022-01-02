@@ -229,7 +229,6 @@ struct reb_simulation_integrator_bs {
     struct reb_ode_state state;  // combined state, nbody+user
     struct reb_ode_state state_user;
     unsigned int allocatedN;
-    double* y;
     double* y1;
     double* C;
     double** D;
