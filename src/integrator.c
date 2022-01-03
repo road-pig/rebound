@@ -46,6 +46,8 @@
 #include "integrator_janus.h"
 #include "integrator_eos.h"
 #include "integrator_bs.h"
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) > (b) ? (b) : (a))   ///< Returns the minimum of a and b
 
 void reb_integrator_part1(struct reb_simulation* r){
 	switch(r->integrator){
@@ -117,6 +119,29 @@ void reb_integrator_part2(struct reb_simulation* r){
 		default:
 			break;
 	}
+    
+    // Integrate other ODEs
+    if (r->integrator != REB_INTEGRATOR_BS && r->odes_N){
+        if (!r->ri_whfast.safe_mode || !r->ri_saba.safe_mode || !r->ri_eos.safe_mode || !r->ri_mercurius.safe_mode){
+            reb_error(r, "Safe mode needs to be enabled when custom ODEs are integrated");
+            r->status = REB_EXIT_ERROR;
+        }
+
+        double dt = r->dt_last_done;
+        double t = r->t - r->dt_last_done; // Note: floating point inaccuracy
+        double forward = (dt>0.) ? 1. : -1.;
+        r->ri_bs.firstOrLastStep = 1;
+        while(t*forward < r->t*forward && fabs((r->t - t)/(fabs(r->t)+1e-16))>1e-15){
+            if (r->ri_bs.dt_proposed !=0.){
+                dt = MIN(fabs(r->ri_bs.dt_proposed), fabs(r->t - t));
+                dt *= forward;
+            }
+            int success = reb_integrator_bs_step(r, dt);
+            if (success){
+                t += dt;
+            }
+        }
+    }
 }
 	
 void reb_integrator_synchronize(struct reb_simulation* r){

@@ -360,13 +360,17 @@ static void reb_integrator_bs_default_scale(struct reb_ode* ode, double* y1, dou
 }
 
 
-int reb_integrator_bs_step(struct reb_simulation* r){
+int reb_integrator_bs_step(struct reb_simulation* r, double dt){
     // return 1 if step was successful
     //        0 if rejected 
     //
     struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
+    
+    if (ri_bs->sequence==NULL){
+        allocate_sequence_arrays(ri_bs);
+    }
+
     double t = r->t;
-    double dt = r->dt; // TODO this might not be correct when used with another integrator
     ri_bs->dt_proposed = dt; // In case of early fail
 
     // initial order selection
@@ -625,13 +629,13 @@ int reb_integrator_bs_step(struct reb_simulation* r){
 
     dt = fabs(dt);
 
-    if (dt < ri_bs->minStep) {
+    if (ri_bs->minStep !=0.0 && dt < ri_bs->minStep) {
         dt = ri_bs->minStep;
         printf("Error. Minimal stepsize reached during integration."); // TODO
         exit(0);
     }
 
-    if (dt > ri_bs->maxStep && ri_bs->maxStep>0.) {
+    if (ri_bs->maxStep !=0.0 && dt > ri_bs->maxStep) {
         dt = ri_bs->maxStep;
         printf("Error. Maximum stepsize reached during integration."); // TODO
         exit(0);
@@ -690,10 +694,6 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
         ri_bs->firstOrLastStep = 1;
     }
     
-    if (ri_bs->sequence==NULL){
-        allocate_sequence_arrays(ri_bs);
-    }
-
     int nbody_length = r->N*3*2;
     if (ri_bs->nbody_ode == NULL){ 
         ri_bs->nbody_ode = reb_create_ode(r, nbody_length);
@@ -715,7 +715,7 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     }
 
 
-    int success = reb_integrator_bs_step(r);
+    int success = reb_integrator_bs_step(r, r->dt);
     if (success){
         r->t += r->dt;
         r->dt_last_done = r->dt;
@@ -814,8 +814,8 @@ void reb_integrator_bs_reset(struct reb_simulation* r){
     // Default settings
     ri_bs->scalAbsoluteTolerance= 1e-5;
     ri_bs->scalRelativeTolerance= 1e-5;
-    ri_bs->maxStep              = 10; // Note: always positive
-    ri_bs->minStep              = 1e-8; // Note: always positive
+    ri_bs->maxStep              = 0;
+    ri_bs->minStep              = 0; 
     ri_bs->firstOrLastStep      = 1;
     ri_bs->previousRejected     = 0;
         

@@ -36,7 +36,7 @@ double run(double e, int integrator, double* energyerror, double* energyerror_ho
     r->integrator = integrator;
     r->ri_bs.scalRelativeTolerance = 1e-8;
     r->ri_bs.scalAbsoluteTolerance = 1e-8;
-    r->dt = 1e-4;
+    r->dt = 1e-2;
 
     struct reb_ode* ho = reb_create_ode(r,2);   // Add an ODE with 2 dimensions
     ho->derivatives = derivatives;              // Right hand side of the ODE
