@@ -294,13 +294,6 @@ static void extrapolate(const struct reb_ode_state* state, double * const coeff,
     }
 }
 
-static void rescale(struct reb_simulation_integrator_bs* ri_bs, double* const y1, double* const y2, double* const scale, int scale_length) {
-    for (int i = 0; i < scale_length; ++i) {
-        scale[i] = ri_bs->scalAbsoluteTolerance + ri_bs->scalRelativeTolerance *MAX(fabs(y1[i]), fabs(y2[i]));
-        scale[i] = ri_bs->scalAbsoluteTolerance + ri_bs->scalRelativeTolerance * 1.0; //TODO. This sets scale to 1 manually
-    }
-} 
-
 static void nbody_derivatives(struct reb_ode_state* state, double* const yDot, const double* const y, double const t){
     struct reb_simulation* const r = (struct reb_simulation* const)(state->ref);
     for (int i=0; i<r->N; i++){
@@ -376,7 +369,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
         ri_bs->targetIter = MAX(1, MIN(sequence_length - 2, (int) floor(0.5 - 0.6 * log10R)));
     }
 
-    double  maxError                 = DBL_MAX;
+    double  maxError = DBL_MAX;
 
     int Ns = ri_bs->N; // Number of states
     struct reb_ode_state* states = ri_bs->states;
@@ -390,7 +383,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
         }else{
             const int length = states[s].length;
             double* scale = states[s].scale;
-            double default_scale = MAX(ri_bs->scalAbsoluteTolerance, ri_bs->scalRelativeTolerance);
+            const double default_scale = MAX(ri_bs->scalAbsoluteTolerance, ri_bs->scalRelativeTolerance);
             for (int i = 0; i < length; ++i) {
                 scale[i] = default_scale;
             }
@@ -448,8 +441,10 @@ void reb_integrator_bs_step(struct reb_simulation* r){
 
                 // estimate the error at the end of the step.
                 error = 0;
+                long int combined_length = 0;
                 for (int s=0; s < Ns; s++){
                     const int length = states[s].length;
+                    combined_length += length;
                     double * C = states[s].C;
                     double * scale = states[s].scale;
                     for (int j = 0; j < length; ++j) {
@@ -457,7 +452,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
                         error = MAX(error, e * e);
                     }
                 }
-                //error = sqrt(error / y_length);
+                error = sqrt(error / combined_length);
                 if (isnan(error)) {
                     printf("Error. NaN appearing during integration.");
                     exit(0);
@@ -659,6 +654,7 @@ struct reb_ode_state* reb_integrator_bs_add_ode(struct reb_simulation_integrator
 
     struct reb_ode_state* state = &ri_bs->states[ri_bs->N-1];
 
+    state->length = length;
     state->allocatedN = length;
     state->D   = malloc(sizeof(double*)*(sequence_length));
     for (int k = 0; k < sequence_length; ++k) {
@@ -702,7 +698,6 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
         double* const y = nbody_state->y;
         for (int i=0; i<r->N; i++){
             const struct reb_particle p = r->particles[i];
-            printf("%.4e\n",p.x);
             y[i*6+0] = p.x;
             y[i*6+1] = p.y;
             y[i*6+2] = p.z;
