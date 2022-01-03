@@ -621,6 +621,7 @@ struct reb_simulation {
     struct reb_ode* odes;  // all ode sets (includes nbody if BS set as integrator)
     int odes_N;            // number of ode sets
     int odes_allocatedN;   // number of ode sets allocated
+    int ode_warnings;
 
      // Callback functions
     void (*additional_forces) (struct reb_simulation* const r);

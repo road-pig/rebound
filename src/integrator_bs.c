@@ -62,6 +62,8 @@
 #include "integrator_bs.h"
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+#define DEBUG 0 // set to 1 to print out debug information (reason for step rejection)
     
 // Default configuration parameter. 
 // They are hard coded here because it
@@ -141,7 +143,7 @@ static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n,
     //                        }
     //                    }
     //
-    //                    // stability checki // TODO
+    //                    // stability check
     //                    //if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
     //                    //    double initialNorm = 0.0;
     //                    //    for (int l = 0; l < length; ++l) {
@@ -421,7 +423,9 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
         if ( ! tryStep(r->odes, Ns, k, ri_bs->sequence[k], t, dt)) {
 
             // the stability check failed, we reduce the global step
-            printf("S"); //TODO
+#if DEBUG
+            printf("S");
+#endif
             dt  = fabs(dt * stabilityReduction);
             reject = 1;
             loop   = 0;
@@ -465,13 +469,16 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
                 }
                 error = sqrt(error / combined_length);
                 if (isnan(error)) {
-                    printf("Error. NaN appearing during integration.");
-                    exit(0);
+                    reb_error(r, "NaN appearing during ODE integration.");
+                    r->status = REB_EXIT_ERROR;
+                    return 0;
                 }
 
                 if ((error > 1.0e25)){ // TODO: Think about what to do when error increases: || ((k > 1) && (error > maxError))) {
                     // error is too big, we reduce the global step
-                    printf("R (error= %.5e)",error);  // TODO
+#if DEBUG
+                    printf("R (error= %.5e)",error);
+#endif
                     dt  = fabs(dt * stabilityReduction);
                     reject = 1;
                     loop   = 0;
@@ -514,7 +521,9 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
                                             ri_bs->targetIter -= 1;
                                         }
                                         dt = ri_bs->optimalStep[ri_bs->targetIter];
-                                        printf("O"); // TODO
+#if DEBUG
+                                        printf("O");
+#endif
                                     }
                                 }
                             }
@@ -532,7 +541,9 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
                                 if (error > ratio * ratio) {
                                     // we don't expect to converge on next iteration
                                     // we reject the step immediately
-                                    printf("o"); // TODO
+#if DEBUG
+                                    printf("o");
+#endif
                                     reject = 1;
                                     loop = 0;
                                     if ((ri_bs->targetIter > 1) &&
@@ -547,7 +558,9 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
                         case 1 : // one past target
                             if (error > 1.0) {
-                                printf("e"); // TODO
+#if DEBUG
+                                printf("e");
+#endif
                                 reject = 1;
                                 if ((ri_bs->targetIter > 1) &&
                                         (ri_bs->costPerTimeUnit[ri_bs->targetIter - 1] <
@@ -573,7 +586,9 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
 
     if (! reject) {
-        printf("."); // TODO
+#if DEBUG
+        printf("."); 
+#endif
         // Swap arrays
         for (int s=0; s < Ns; s++){
             double* y_tmp = odes[s].y;
@@ -631,14 +646,12 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
     if (ri_bs->minStep !=0.0 && dt < ri_bs->minStep) {
         dt = ri_bs->minStep;
-        printf("Error. Minimal stepsize reached during integration."); // TODO
-        exit(0);
+        reb_warning(r,"Minimal stepsize reached during ODE integration.");
     }
 
     if (ri_bs->maxStep !=0.0 && dt > ri_bs->maxStep) {
         dt = ri_bs->maxStep;
-        printf("Error. Maximum stepsize reached during integration."); // TODO
-        exit(0);
+        reb_warning(r,"Maximum stepsize reached during ODE integration.");
     }
 
     if (! forward) {

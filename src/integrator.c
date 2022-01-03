@@ -122,9 +122,9 @@ void reb_integrator_part2(struct reb_simulation* r){
     
     // Integrate other ODEs
     if (r->integrator != REB_INTEGRATOR_BS && r->odes_N){
-        if (!r->ri_whfast.safe_mode || !r->ri_saba.safe_mode || !r->ri_eos.safe_mode || !r->ri_mercurius.safe_mode){
-            reb_error(r, "Safe mode needs to be enabled when custom ODEs are integrated");
-            r->status = REB_EXIT_ERROR;
+        if (r->ode_warnings==0 && (!r->ri_whfast.safe_mode || !r->ri_saba.safe_mode || !r->ri_eos.safe_mode || !r->ri_mercurius.safe_mode)){
+            reb_warning(r, "Safe mode should be enabled when custom ODEs are being used.");
+            r->ode_warnings = 1;
         }
 
         double dt = r->dt_last_done;
