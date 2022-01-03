@@ -79,193 +79,188 @@ static const int maxIter = 2; // maximal number of iterations for which checks a
 static const int maxChecks = 1; // maximal number of checks for each iteration
 
 
-static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n, const double t0, const double step, const int method) {
+static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n, const double t0, const double step) {
     const double subStep  = step / n;
     double t = t0;
 
-    switch (method) {
-        case 0: // LeapFrog
-            {
-                // first substep
-                for (int s=0; s < Ns; s++){
-                    double* y0 = odes[s].y;
-                    double* y1 = odes[s].y1;
-                    const int length = odes[s].length;
-                    for (int i = 0; i < length; ++i) {
-                        if (i%6<3){ // Drift
-                            y1[i] = y0[i] + 0.5*subStep * y0[i+3];
-                        }
-                    }
-                }
-                t += 0.5*subStep;
-                for (int s=0; s < Ns; s++){
-                    odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
-                }
-                for (int s=0; s < Ns; s++){
-                    double* y0 = odes[s].y;
-                    double* y1 = odes[s].y1;
-                    double* yDot = odes[s].yDot;
-                    const int length = odes[s].length;
-                    for (int i = 0; i < length; ++i) {
-                        if (i%6>2){ // Kick
-                            y1[i] = y0[i] + subStep * yDot[i];
-                        }
-                    }
-                }
-
-
-                // other substeps
-                for (int j = 1; j < n; ++j) {
-                    t += subStep;
-                    for (int s=0; s < Ns; s++){
-                        double* y1 = odes[s].y1;
-                        const int length = odes[s].length;
-                        for (int i = 0; i < length; ++i) {
-                            if (i%6<3){ // Drift
-                                y1[i] = y1[i] + subStep * y1[i+3];
-                            }
-                        }
-                    }
-                    for (int s=0; s < Ns; s++){
-                        odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
-                    }
-                    for (int s=0; s < Ns; s++){
-                        double* y1 = odes[s].y1;
-                        double* yDot = odes[s].yDot;
-                        const int length = odes[s].length;
-                        for (int i = 0; i < length; ++i) {
-                            if (i%6>2){ // Kick
-                                y1[i] = y1[i] + subStep * yDot[i];
-                            }
-                        }
-                    }
-
-                    // stability checki // TODO
-                    //if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
-                    //    double initialNorm = 0.0;
-                    //    for (int l = 0; l < length; ++l) {
-                    //        const double ratio = y0Dot[l] / scale[l];
-                    //        initialNorm += ratio * ratio;
-                    //    }
-                    //    double deltaNorm = 0.0;
-                    //    for (int l = 0; l < length; ++l) {
-                    //        const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
-                    //        deltaNorm += ratio * ratio;
-                    //    }
-                    //    //printf("iii   %e %e\n",initialNorm, deltaNorm);
-                    //    if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
-                    //        return 0;
-                    //    }
-                    //}
-                }
-
-                // correction of the last substep (at t0 + step)
-                for (int s=0; s < Ns; s++){
-                    double* y1 = odes[s].y1;
-                    const int length = odes[s].length;
-                    for (int i = 0; i < length; ++i) {
-                        if (i%6<3){ // Drift
-                            y1[i] = y1[i] + 0.5 * subStep * y1[i+3];
-                        }
-                    }
-                }
-
-                return 1;
-            }
-        case 1: // Modified Midpoint
-            {
-                // first substep
-                t += subStep;
-                for (int s=0; s < Ns; s++){
-                    double* y0 = odes[s].y;
-                    double* y1 = odes[s].y1;
-                    double* y0Dot = odes[s].y0Dot;
-                    const int length = odes[s].length;
-                    for (int i = 0; i < length; ++i) {
-                        y1[i] = y0[i] + subStep * y0Dot[i];
-                    }
-                }
-
-                // other substeps
-                for (int s=0; s < Ns; s++){
-                    odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
-                }
-                for (int s=0; s < Ns; s++){
-                    double* y0 = odes[s].y;
-                    double* yTmp = odes[s].yTmp;
-                    const int length = odes[s].length;
-                    for (int i = 0; i < length; ++i) {
-                        yTmp[i] = y0[i];
-                    }
-                }
-
-                for (int j = 1; j < n; ++j) {  // Note: iterating n substeps, not 2n substeps as in Eq. (9.13)
-                    t += subStep;
-                    for (int s=0; s < Ns; s++){
-                        double* y1 = odes[s].y1;
-                        double* yDot = odes[s].yDot;
-                        double* yTmp = odes[s].yTmp;
-                        const int length = odes[s].length;
-                        for (int i = 0; i < length; ++i) {
-                            const double middle = y1[i];
-                            y1[i]       = yTmp[i] + 2.* subStep * yDot[i];
-                            yTmp[i]       = middle;
-                        }
-                    }
-
-                    for (int s=0; s < Ns; s++){
-                        odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
-                    }
-
-                    // stability check
-                    if (j <= maxChecks && k < maxIter) {
-                        double initialNorm = 0.0;
-                        for (int s=0; s < Ns; s++){
-                            double* y0Dot = odes[s].y0Dot;
-                            double* scale = odes[s].scale;
-                            const int length = odes[s].length;
-                            for (int l = 0; l < length; ++l) {
-                                const double ratio = y0Dot[l] / scale[l];
-                                initialNorm += ratio * ratio;
-                            }
-                        }
-                        double deltaNorm = 0.0;
-                        for (int s=0; s < Ns; s++){
-                            double* yDot = odes[s].yDot;
-                            double* y0Dot = odes[s].y0Dot;
-                            double* scale = odes[s].scale;
-                            const int length = odes[s].length;
-                            for (int l = 0; l < length; ++l) {
-                                const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
-                                deltaNorm += ratio * ratio;
-                            }
-                        }
-                        if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
-                            return 0;
-                        }
-                    }
-
-                }
-
-                // correction of the last substep (at t0 + step)
-                for (int s=0; s < Ns; s++){
-                    double* y1 = odes[s].y1;
-                    double* yTmp = odes[s].yTmp;
-                    double* yDot = odes[s].yDot;
-                    const int length = odes[s].length;
-                    for (int i = 0; i < length; ++i) {
-                        y1[i] = 0.5 * (yTmp[i] + y1[i] + subStep * yDot[i]); // = 0.25*(y_(2n-1) + 2*y_n(2) + y_(2n+1))     Eq (9.13c)
-                    }
-                }
-
-                return 1;
-            }
-            return 0;
-            break;
-        default:
-            printf("Error. method not implemented in BS\n");
-            exit(1);
+    // LeapFrog Method did not seem to be of any advantage 
+    //    switch (method) {
+    //        case 0: // LeapFrog
+    //            {
+    //                // first substep
+    //                for (int s=0; s < Ns; s++){
+    //                    double* y0 = odes[s].y;
+    //                    double* y1 = odes[s].y1;
+    //                    const int length = odes[s].length;
+    //                    for (int i = 0; i < length; ++i) {
+    //                        if (i%6<3){ // Drift
+    //                            y1[i] = y0[i] + 0.5*subStep * y0[i+3];
+    //                        }
+    //                    }
+    //                }
+    //                t += 0.5*subStep;
+    //                for (int s=0; s < Ns; s++){
+    //                    odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
+    //                }
+    //                for (int s=0; s < Ns; s++){
+    //                    double* y0 = odes[s].y;
+    //                    double* y1 = odes[s].y1;
+    //                    double* yDot = odes[s].yDot;
+    //                    const int length = odes[s].length;
+    //                    for (int i = 0; i < length; ++i) {
+    //                        if (i%6>2){ // Kick
+    //                            y1[i] = y0[i] + subStep * yDot[i];
+    //                        }
+    //                    }
+    //                }
+    //
+    //
+    //                // other substeps
+    //                for (int j = 1; j < n; ++j) {
+    //                    t += subStep;
+    //                    for (int s=0; s < Ns; s++){
+    //                        double* y1 = odes[s].y1;
+    //                        const int length = odes[s].length;
+    //                        for (int i = 0; i < length; ++i) {
+    //                            if (i%6<3){ // Drift
+    //                                y1[i] = y1[i] + subStep * y1[i+3];
+    //                            }
+    //                        }
+    //                    }
+    //                    for (int s=0; s < Ns; s++){
+    //                        odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
+    //                    }
+    //                    for (int s=0; s < Ns; s++){
+    //                        double* y1 = odes[s].y1;
+    //                        double* yDot = odes[s].yDot;
+    //                        const int length = odes[s].length;
+    //                        for (int i = 0; i < length; ++i) {
+    //                            if (i%6>2){ // Kick
+    //                                y1[i] = y1[i] + subStep * yDot[i];
+    //                            }
+    //                        }
+    //                    }
+    //
+    //                    // stability checki // TODO
+    //                    //if (performStabilityCheck && (j <= maxChecks) && (k < maxIter)) {
+    //                    //    double initialNorm = 0.0;
+    //                    //    for (int l = 0; l < length; ++l) {
+    //                    //        const double ratio = y0Dot[l] / scale[l];
+    //                    //        initialNorm += ratio * ratio;
+    //                    //    }
+    //                    //    double deltaNorm = 0.0;
+    //                    //    for (int l = 0; l < length; ++l) {
+    //                    //        const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
+    //                    //        deltaNorm += ratio * ratio;
+    //                    //    }
+    //                    //    //printf("iii   %e %e\n",initialNorm, deltaNorm);
+    //                    //    if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
+    //                    //        return 0;
+    //                    //    }
+    //                    //}
+    //                }
+    //
+    //                // correction of the last substep (at t0 + step)
+    //                for (int s=0; s < Ns; s++){
+    //                    double* y1 = odes[s].y1;
+    //                    const int length = odes[s].length;
+    //                    for (int i = 0; i < length; ++i) {
+    //                        if (i%6<3){ // Drift
+    //                            y1[i] = y1[i] + 0.5 * subStep * y1[i+3];
+    //                        }
+    //                    }
+    //                }
+    //
+    //                return 1;
+    //            }
+    
+    
+    // Modified Midpoint method
+    // first substep
+    t += subStep;
+    for (int s=0; s < Ns; s++){
+        double* y0 = odes[s].y;
+        double* y1 = odes[s].y1;
+        double* y0Dot = odes[s].y0Dot;
+        const int length = odes[s].length;
+        for (int i = 0; i < length; ++i) {
+            y1[i] = y0[i] + subStep * y0Dot[i];
+        }
     }
+
+    // other substeps
+    for (int s=0; s < Ns; s++){
+        odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
+    }
+    for (int s=0; s < Ns; s++){
+        double* y0 = odes[s].y;
+        double* yTmp = odes[s].yTmp;
+        const int length = odes[s].length;
+        for (int i = 0; i < length; ++i) {
+            yTmp[i] = y0[i];
+        }
+    }
+
+    for (int j = 1; j < n; ++j) {  // Note: iterating n substeps, not 2n substeps as in Eq. (9.13)
+        t += subStep;
+        for (int s=0; s < Ns; s++){
+            double* y1 = odes[s].y1;
+            double* yDot = odes[s].yDot;
+            double* yTmp = odes[s].yTmp;
+            const int length = odes[s].length;
+            for (int i = 0; i < length; ++i) {
+                const double middle = y1[i];
+                y1[i]       = yTmp[i] + 2.* subStep * yDot[i];
+                yTmp[i]       = middle;
+            }
+        }
+
+        for (int s=0; s < Ns; s++){
+            odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
+        }
+
+        // stability check
+        if (j <= maxChecks && k < maxIter) {
+            double initialNorm = 0.0;
+            for (int s=0; s < Ns; s++){
+                double* y0Dot = odes[s].y0Dot;
+                double* scale = odes[s].scale;
+                const int length = odes[s].length;
+                for (int l = 0; l < length; ++l) {
+                    const double ratio = y0Dot[l] / scale[l];
+                    initialNorm += ratio * ratio;
+                }
+            }
+            double deltaNorm = 0.0;
+            for (int s=0; s < Ns; s++){
+                double* yDot = odes[s].yDot;
+                double* y0Dot = odes[s].y0Dot;
+                double* scale = odes[s].scale;
+                const int length = odes[s].length;
+                for (int l = 0; l < length; ++l) {
+                    const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
+                    deltaNorm += ratio * ratio;
+                }
+            }
+            if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
+                return 0;
+            }
+        }
+
+    }
+
+    // correction of the last substep (at t0 + step)
+    for (int s=0; s < Ns; s++){
+        double* y1 = odes[s].y1;
+        double* yTmp = odes[s].yTmp;
+        double* yDot = odes[s].yDot;
+        const int length = odes[s].length;
+        for (int i = 0; i < length; ++i) {
+            y1[i] = 0.5 * (yTmp[i] + y1[i] + subStep * yDot[i]); // = 0.25*(y_(2n-1) + 2*y_n(2) + y_(2n+1))     Eq (9.13c)
+        }
+    }
+
+    return 1;
 }
 
 static void extrapolate(const struct reb_ode* ode, double * const coeff, const int k) {
@@ -273,7 +268,7 @@ static void extrapolate(const struct reb_ode* ode, double * const coeff, const i
     double* const C = ode->C;  // C and D values follow Numerical Recipes 
     double** const D =  ode->D;
     double const length = ode->length;
-        for (int j = 0; j < k; ++j) {
+    for (int j = 0; j < k; ++j) {
         double xi = coeff[k-j-1];
         double xim1 = coeff[k];
         double facC = xi/(xi-xim1);
@@ -372,6 +367,7 @@ int reb_integrator_bs_step(struct reb_simulation* r){
     struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
     double t = r->t;
     double dt = r->dt; // TODO this might not be correct when used with another integrator
+    ri_bs->dt_proposed = dt; // In case of early fail
 
     // initial order selection
     if (ri_bs->targetIter == 0){
@@ -386,7 +382,15 @@ int reb_integrator_bs_step(struct reb_simulation* r){
     struct reb_ode* odes = r->odes;
     double error;
     int reject = 0;
-    
+
+    // Check if ODEs have been set up correctly 
+    for (int s=0; s < Ns; s++){
+        if (!odes[s].derivatives){
+            reb_error(r,"A user-specified set of ODEs has not been provided with a derivatives function.");
+            r->status = REB_EXIT_ERROR;
+            return 0;
+        }
+    }
     
     for (int s=0; s < Ns; s++){
         if (odes[s].getscale){
@@ -397,10 +401,8 @@ int reb_integrator_bs_step(struct reb_simulation* r){
     }
 
     // first evaluation, at the beginning of the step
-    if (ri_bs->method == 1){ // Note: only for midpoint. leapfrog calculates it itself
-        for (int s=0; s < Ns; s++){
-            r->odes[s].derivatives(&(r->odes[s]), r->odes[s].y0Dot, r->odes[s].y, t);
-        }
+    for (int s=0; s < Ns; s++){
+        r->odes[s].derivatives(&(r->odes[s]), r->odes[s].y0Dot, r->odes[s].y, t);
     }
 
     const int forward = (dt >= 0.);
@@ -412,7 +414,7 @@ int reb_integrator_bs_step(struct reb_simulation* r){
         ++k;
         
         // modified midpoint integration with the current substep
-        if ( ! tryStep(r->odes, Ns, k, ri_bs->sequence[k], t, dt, ri_bs->method)) {
+        if ( ! tryStep(r->odes, Ns, k, ri_bs->sequence[k], t, dt)) {
 
             // the stability check failed, we reduce the global step
             printf("S"); //TODO
@@ -698,7 +700,6 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
         ri_bs->nbody_ode->derivatives = nbody_derivatives;
         ri_bs->firstOrLastStep = 1;
     }
-        printf("allocated new ode %p  %p     \n",&r->odes[0], ri_bs->nbody_ode);
 
     {
         double* const y = ri_bs->nbody_ode->y;
@@ -817,6 +818,5 @@ void reb_integrator_bs_reset(struct reb_simulation* r){
     ri_bs->minStep              = 1e-8; // Note: always positive
     ri_bs->firstOrLastStep      = 1;
     ri_bs->previousRejected     = 0;
-    ri_bs->method               = 1;  // 1== midpoint
         
 }

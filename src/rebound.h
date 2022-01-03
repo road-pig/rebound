@@ -216,10 +216,10 @@ struct reb_simulation_integrator_whfast {
     unsigned int recalculate_coordinates_but_not_synchronized_warning;
 };
 
-struct reb_ode{ // defines an ODE state
+struct reb_ode{ // defines an ODE 
     int length; // number of components / dimenion
-    void (*derivatives)(struct reb_ode* state, double* const yDot, const double* const y, double const t); // right hand side 
-    void (*getscale)(struct reb_ode* state, double* const y0, const double* const y1); // right hand side 
+    void (*derivatives)(struct reb_ode* const ode, double* const yDot, const double* const y, const double t); // right hand side 
+    void (*getscale)(struct reb_ode* const ode, const double* const y0, const double* const y1); // right hand side 
     struct reb_simulation* r; // weak reference to main simulation 
     void* ref;  // pointer to any additional data needed for derivatives
     unsigned int allocatedN;
@@ -248,7 +248,6 @@ struct reb_simulation_integrator_bs {
     double dt_proposed;
     int firstOrLastStep;
     int previousRejected;
-    int method;
     int targetIter;
 };
 
@@ -744,6 +743,9 @@ enum reb_input_binary_messages {
     REB_INPUT_BINARY_WARNING_CORRUPTFILE = 512,
 };
 
+// ODE functions
+struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length);
+void reb_free_ode(struct reb_ode* ode);
 
 // Miscellaneous functions
 uint32_t reb_hash(const char* str);
