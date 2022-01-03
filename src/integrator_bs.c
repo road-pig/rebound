@@ -356,6 +356,13 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     }
 }
 
+static void reb_integrator_bs_default_scale(struct reb_ode_state* state, double* y1, double* y2, double absTol, double relTol){
+    double* scale = state->scale;
+    int length = state->length;
+    for (int i = 0; i < length; i++) {
+        scale[i] = absTol + relTol * MAX(fabs(y1[i]), fabs(y2[i]));
+    }
+}
 
 
 void reb_integrator_bs_step(struct reb_simulation* r){
@@ -381,12 +388,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
         if (states[s].getscale){
             states[s].getscale(&states[s], states[s].y, states[s].y); // initial scaling
         }else{
-            const int length = states[s].length;
-            double* scale = states[s].scale;
-            const double default_scale = MAX(ri_bs->scalAbsoluteTolerance, ri_bs->scalRelativeTolerance);
-            for (int i = 0; i < length; ++i) {
-                scale[i] = default_scale;
-            }
+            reb_integrator_bs_default_scale(&states[s], states[s].y, states[s].y, ri_bs->scalRelativeTolerance, ri_bs->scalAbsoluteTolerance);
         }
     }
 
@@ -436,6 +438,8 @@ void reb_integrator_bs_step(struct reb_simulation* r){
                     extrapolate(&ri_bs->states[s], ri_bs->coeff, k);
                     if (states[s].getscale){
                         states[s].getscale(&states[s], states[s].y, states[s].y1);
+                    }else{
+                        reb_integrator_bs_default_scale(&states[s], states[s].y, states[s].y, ri_bs->scalRelativeTolerance, ri_bs->scalAbsoluteTolerance);
                     }
                 }
 
@@ -685,17 +689,15 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     }
 
     int nbody_length = r->N*3*2;
-    struct reb_ode_state* nbody_state;
-    if (ri_bs->N < 1){ // TODO better check if nbody already initialized
-        nbody_state = reb_integrator_bs_add_ode(ri_bs, nbody_length);
-        nbody_state->derivatives  = nbody_derivatives;
-        nbody_state->ref    = r;
+    if (ri_bs->nbody_state == NULL){ 
+        ri_bs->nbody_state = reb_integrator_bs_add_ode(ri_bs, nbody_length);
+        ri_bs->nbody_state->derivatives = nbody_derivatives;
+        ri_bs->nbody_state->ref = r;
         ri_bs->firstOrLastStep = 1;
     }
-    nbody_state = &ri_bs->states[0]; //TODO
 
     {
-        double* const y = nbody_state->y;
+        double* const y = ri_bs->nbody_state->y;
         for (int i=0; i<r->N; i++){
             const struct reb_particle p = r->particles[i];
             y[i*6+0] = p.x;
@@ -713,7 +715,7 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
 
     // N-body specific:
     {
-        double* const y = nbody_state->y; // y might have changed
+        double* const y = ri_bs->nbody_state->y; // y might have been swapped
         for (int i=0; i<r->N; i++){
             struct reb_particle* const p = &(r->particles[i]);
             p->x  = y[i*6+0];

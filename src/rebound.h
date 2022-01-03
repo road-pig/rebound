@@ -234,7 +234,8 @@ struct reb_ode_state{ // defines an ODE state
 
 
 struct reb_simulation_integrator_bs {
-    struct reb_ode_state* states;  // combined state, nbody+user
+    struct reb_ode_state* nbody_state; //
+    struct reb_ode_state* states;  // all odes
     int N;          // number of states
     int allocatedN; // number of states allocated
     int* sequence;      // stepsize sequence
