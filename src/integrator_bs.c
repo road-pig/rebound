@@ -365,9 +365,9 @@ static void reb_integrator_bs_default_scale(struct reb_ode_state* state, double*
 }
 
 
-void reb_integrator_bs_step(struct reb_simulation* r){
-    struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
-    
+int reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs, double* t, double* dt){
+    // return 1 if step was successful
+    //        0 if rejected 
 
     // initial order selection
     if (ri_bs->targetIter == 0){
@@ -395,13 +395,12 @@ void reb_integrator_bs_step(struct reb_simulation* r){
     // first evaluation, at the beginning of the step
     if (ri_bs->method == 1){ // Note: only for midpoint. leapfrog calculates it itself
         for (int s=0; s < Ns; s++){
-            ri_bs->states[s].derivatives(&(ri_bs->states[s]), ri_bs->states[s].y0Dot, ri_bs->states[s].y, r->t);
+            ri_bs->states[s].derivatives(&(ri_bs->states[s]), ri_bs->states[s].y0Dot, ri_bs->states[s].y, *t);
         }
     }
 
-    const int forward = (r->dt >= 0.);
-    const double stepSize = r->dt;
-    printf("step = %.7e    order== %d\n",stepSize, ri_bs->targetIter);
+    const int forward = (*dt >= 0.);
+    printf("step = %.7e    order== %d\n",*dt, ri_bs->targetIter);
 
 
     // iterate over several substep sizes
@@ -411,11 +410,11 @@ void reb_integrator_bs_step(struct reb_simulation* r){
         ++k;
         
         // modified midpoint integration with the current substep
-        if ( ! tryStep(ri_bs->states, Ns, k, ri_bs->sequence[k], r->t, stepSize, ri_bs->method)) {
+        if ( ! tryStep(ri_bs->states, Ns, k, ri_bs->sequence[k], *t, *dt, ri_bs->method)) {
 
             // the stability check failed, we reduce the global step
             printf("S"); //TODO
-            r->dt  = fabs(stepSize * stabilityReduction);
+            *dt  = fabs(*dt * stabilityReduction);
             reject = 1;
             loop   = 0;
 
@@ -465,7 +464,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
                 if ((error > 1.0e25)){ // TODO: Think about what to do when error increases: || ((k > 1) && (error > maxError))) {
                     // error is too big, we reduce the global step
                     printf("R (error= %.5e)",error);  // TODO
-                    r->dt  = fabs(stepSize * stabilityReduction);
+                    *dt  = fabs(*dt * stabilityReduction);
                     reject = 1;
                     loop   = 0;
                 } else {
@@ -477,7 +476,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
                     double fac = stepControl2 / pow(error / stepControl1, exp);
                     const double power = pow(stepControl3, exp);
                     fac = MAX(power / stepControl4, MIN(1. / power, fac));
-                    ri_bs->optimalStep[k]     = fabs(stepSize * fac);
+                    ri_bs->optimalStep[k]     = fabs(*dt * fac);
                     ri_bs->costPerTimeUnit[k] = ri_bs->costPerStep[k] / ri_bs->optimalStep[k];
 
                     // check convergence
@@ -506,7 +505,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
                                                  orderControl1 * ri_bs->costPerTimeUnit[ri_bs->targetIter])) {
                                             ri_bs->targetIter -= 1;
                                         }
-                                        r->dt = ri_bs->optimalStep[ri_bs->targetIter];
+                                        *dt = ri_bs->optimalStep[ri_bs->targetIter];
                                         printf("O"); // TODO
                                     }
                                 }
@@ -533,7 +532,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
                                              orderControl1 * ri_bs->costPerTimeUnit[ri_bs->targetIter])) {
                                         --ri_bs->targetIter;
                                     }
-                                    r->dt = ri_bs->optimalStep[ri_bs->targetIter];
+                                    *dt = ri_bs->optimalStep[ri_bs->targetIter];
                                 }
                             }
                             break;
@@ -547,7 +546,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
                                          orderControl1 * ri_bs->costPerTimeUnit[ri_bs->targetIter])) {
                                     --ri_bs->targetIter;
                                 }
-                                r->dt = ri_bs->optimalStep[ri_bs->targetIter];
+                                *dt = ri_bs->optimalStep[ri_bs->targetIter];
                             }
                             loop = 0;
                             break;
@@ -567,8 +566,6 @@ void reb_integrator_bs_step(struct reb_simulation* r){
 
     if (! reject) {
         printf("."); // TODO
-        r->t += stepSize;
-        r->dt_last_done = stepSize;
         // Swap arrays
         for (int s=0; s < Ns; s++){
             double* y_tmp = states[s].y;
@@ -603,17 +600,17 @@ void reb_integrator_bs_step(struct reb_simulation* r){
             // after a rejected step neither order nor stepsize
             // should increase
             ri_bs->targetIter = MIN(optimalIter, k);
-            r->dt = MIN(fabs(stepSize), ri_bs->optimalStep[ri_bs->targetIter]);
+            *dt = MIN(fabs(*dt), ri_bs->optimalStep[ri_bs->targetIter]);
         } else {
             // stepsize control
             if (optimalIter <= k) {
-                r->dt = ri_bs->optimalStep[optimalIter];
+                *dt = ri_bs->optimalStep[optimalIter];
             } else {
                 if ((k < ri_bs->targetIter) &&
                         (ri_bs->costPerTimeUnit[k] < orderControl2 * ri_bs->costPerTimeUnit[k - 1])) {
-                    r->dt = ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter + 1] / ri_bs->costPerStep[k];
+                    *dt = ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter + 1] / ri_bs->costPerStep[k];
                 } else {
-                    r->dt = ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter] / ri_bs->costPerStep[k];
+                    *dt = ri_bs->optimalStep[k] * ri_bs->costPerStep[optimalIter] / ri_bs->costPerStep[k];
                 }
             }
 
@@ -622,22 +619,22 @@ void reb_integrator_bs_step(struct reb_simulation* r){
         }
     }
 
-    r->dt = fabs(r->dt);
+    *dt = fabs(*dt);
 
-    if (r->dt < ri_bs->minStep) {
-        r->dt = ri_bs->minStep;
+    if (*dt < ri_bs->minStep) {
+        *dt = ri_bs->minStep;
         printf("Error. Minimal stepsize reached during integration."); // TODO
         exit(0);
     }
 
-    if (r->dt > ri_bs->maxStep && ri_bs->maxStep>0.) {
-        r->dt = ri_bs->maxStep;
+    if (*dt > ri_bs->maxStep && ri_bs->maxStep>0.) {
+        *dt = ri_bs->maxStep;
         printf("Error. Maximum stepsize reached during integration."); // TODO
         exit(0);
     }
 
     if (! forward) {
-        r->dt = -r->dt;
+        *dt = -*dt;
     }
 
     if (reject) {
@@ -646,6 +643,7 @@ void reb_integrator_bs_step(struct reb_simulation* r){
         ri_bs->previousRejected = 0;
         ri_bs->firstOrLastStep = 0;
     }
+    return !reject;
 }
 
 struct reb_ode_state* reb_integrator_bs_add_ode(struct reb_simulation_integrator_bs* ri_bs, unsigned int length){
@@ -711,7 +709,12 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
 
 
     // Generic integrator stuff
-    reb_integrator_bs_step(r);
+    double dt_try = r->dt;
+    int success = reb_integrator_bs_step(ri_bs, &r->t, &r->dt);
+    if (success){
+        r->t += dt_try;
+        r->dt_last_done = dt_try;
+    }
 
     // N-body specific:
     {
