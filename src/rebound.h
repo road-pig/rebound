@@ -247,6 +247,7 @@ struct reb_simulation_integrator_bs {
     double scalRelativeTolerance; // Allowed relative scalar error.
     double minStep;
     double maxStep;
+    double dt_proposed;
     int firstOrLastStep;
     int previousRejected;
     int method;
