@@ -386,6 +386,10 @@ void reb_reset_temporary_pointers(struct reb_simulation* const r){
     r->ri_janus.order = 6;
     r->ri_janus.scale_pos = 1e-16;
     r->ri_janus.scale_vel = 1e-16;
+    // ********** ODEs
+    r->odes = NULL;
+    r->odes_N = 0;
+    r->odes_allocatedN = 0;
 }
 
 int reb_reset_function_pointers(struct reb_simulation* const r){

@@ -220,6 +220,7 @@ struct reb_ode{ // defines an ODE state
     int length; // number of components / dimenion
     void (*derivatives)(struct reb_ode* state, double* const yDot, const double* const y, double const t); // right hand side 
     void (*getscale)(struct reb_ode* state, double* const y0, const double* const y1); // right hand side 
+    struct reb_simulation* r; // weak reference to main simulation 
     void* ref;  // pointer to any additional data needed for derivatives
     unsigned int allocatedN;
     double* y;      // Current state 
@@ -235,9 +236,6 @@ struct reb_ode{ // defines an ODE state
 
 struct reb_simulation_integrator_bs {
     struct reb_ode* nbody_ode; //
-    struct reb_ode* odes;  // all odes (includes nbody)
-    int N;          // number of states
-    int allocatedN; // number of states allocated
     int* sequence;      // stepsize sequence
     int* costPerStep;   // overall cost of applying step reduction up to iteration k + 1, in number of calls.
     double* costPerTimeUnit; // cost per unit step.
@@ -619,6 +617,11 @@ struct reb_simulation {
     struct reb_simulation_integrator_janus ri_janus;        // The JANUS struct 
     struct reb_simulation_integrator_eos ri_eos;            // The EOS struct 
     struct reb_simulation_integrator_bs ri_bs;              // The BS struct
+
+    // ODEs
+    struct reb_ode* odes;  // all ode sets (includes nbody if BS set as integrator)
+    int odes_N;            // number of ode sets
+    int odes_allocatedN;   // number of ode sets allocated
 
      // Callback functions
     void (*additional_forces) (struct reb_simulation* const r);

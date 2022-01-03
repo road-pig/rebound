@@ -295,7 +295,7 @@ static void extrapolate(const struct reb_ode* ode, double * const coeff, const i
 }
 
 static void nbody_derivatives(struct reb_ode* ode, double* const yDot, const double* const y, double const t){
-    struct reb_simulation* const r = (struct reb_simulation* const)(ode->ref);
+    struct reb_simulation* const r = ode->r;
     for (int i=0; i<r->N; i++){
          struct reb_particle* const p = &(r->particles[i]);
          p->x  = y[i*6+0];
@@ -365,9 +365,13 @@ static void reb_integrator_bs_default_scale(struct reb_ode* ode, double* y1, dou
 }
 
 
-int reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs, double t, double dt){
+int reb_integrator_bs_step(struct reb_simulation* r){
     // return 1 if step was successful
     //        0 if rejected 
+    //
+    struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
+    double t = r->t;
+    double dt = r->dt; // TODO this might not be correct when used with another integrator
 
     // initial order selection
     if (ri_bs->targetIter == 0){
@@ -378,8 +382,8 @@ int reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs, double t,
 
     double  maxError = DBL_MAX;
 
-    int Ns = ri_bs->N; // Number of ode sets
-    struct reb_ode* odes = ri_bs->odes;
+    int Ns = r->odes_N; // Number of ode sets
+    struct reb_ode* odes = r->odes;
     double error;
     int reject = 0;
     
@@ -395,7 +399,7 @@ int reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs, double t,
     // first evaluation, at the beginning of the step
     if (ri_bs->method == 1){ // Note: only for midpoint. leapfrog calculates it itself
         for (int s=0; s < Ns; s++){
-            ri_bs->odes[s].derivatives(&(ri_bs->odes[s]), ri_bs->odes[s].y0Dot, ri_bs->odes[s].y, t);
+            r->odes[s].derivatives(&(r->odes[s]), r->odes[s].y0Dot, r->odes[s].y, t);
         }
     }
 
@@ -408,7 +412,7 @@ int reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs, double t,
         ++k;
         
         // modified midpoint integration with the current substep
-        if ( ! tryStep(ri_bs->odes, Ns, k, ri_bs->sequence[k], t, dt, ri_bs->method)) {
+        if ( ! tryStep(r->odes, Ns, k, ri_bs->sequence[k], t, dt, ri_bs->method)) {
 
             // the stability check failed, we reduce the global step
             printf("S"); //TODO
@@ -432,7 +436,7 @@ int reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs, double t,
                 // extrapolate the state at the end of the step
                 // using last iteration data
                 for (int s=0; s < Ns; s++){
-                    extrapolate(&ri_bs->odes[s], ri_bs->coeff, k);
+                    extrapolate(&r->odes[s], ri_bs->coeff, k);
                     if (odes[s].getscale){
                         odes[s].getscale(&odes[s], odes[s].y, odes[s].y1);
                     }else{
@@ -645,16 +649,17 @@ int reb_integrator_bs_step(struct reb_simulation_integrator_bs* ri_bs, double t,
     return !reject;
 }
 
-struct reb_ode* reb_integrator_bs_add_ode(struct reb_simulation_integrator_bs* ri_bs, unsigned int length){
-    if (ri_bs->allocatedN <= ri_bs->N){
-        ri_bs->allocatedN += 1;
-        ri_bs->odes = realloc(ri_bs->odes,sizeof(struct reb_ode)*ri_bs->allocatedN);
-        memset(&ri_bs->odes[ri_bs->allocatedN-1], 0, sizeof(struct reb_ode));
+struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
+    if (r->odes_allocatedN <= r->odes_N){
+        r->odes_allocatedN += 1;
+        r->odes = realloc(r->odes,sizeof(struct reb_ode)*r->odes_allocatedN);
+        memset(&r->odes[r->odes_allocatedN-1], 0, sizeof(struct reb_ode));
     }
-    ri_bs->N += 1;
+    r->odes_N += 1;
 
-    struct reb_ode* ode = &ri_bs->odes[ri_bs->N-1];
+    struct reb_ode* ode = &r->odes[r->odes_N-1];
 
+    ode->r = r; // weak reference
     ode->length = length;
     ode->allocatedN = length;
     ode->D   = malloc(sizeof(double*)*(sequence_length));
@@ -670,6 +675,8 @@ struct reb_ode* reb_integrator_bs_add_ode(struct reb_simulation_integrator_bs* r
     ode->yDot  = realloc(ode->yDot, sizeof(double)*length);
 
     ode->scale = realloc(ode->scale, sizeof(double)*length);
+
+    r->ri_bs.firstOrLastStep = 1;
 
     return ode;
 }
@@ -687,11 +694,11 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
 
     int nbody_length = r->N*3*2;
     if (ri_bs->nbody_ode == NULL){ 
-        ri_bs->nbody_ode = reb_integrator_bs_add_ode(ri_bs, nbody_length);
+        ri_bs->nbody_ode = reb_create_ode(r, nbody_length);
         ri_bs->nbody_ode->derivatives = nbody_derivatives;
-        ri_bs->nbody_ode->ref = r;
         ri_bs->firstOrLastStep = 1;
     }
+        printf("allocated new ode %p  %p     \n",&r->odes[0], ri_bs->nbody_ode);
 
     {
         double* const y = ri_bs->nbody_ode->y;
@@ -707,7 +714,7 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     }
 
 
-    int success = reb_integrator_bs_step(ri_bs, r->t, r->dt);
+    int success = reb_integrator_bs_step(r);
     if (success){
         r->t += r->dt;
         r->dt_last_done = r->dt;
@@ -732,7 +739,7 @@ void reb_integrator_bs_synchronize(struct reb_simulation* r){
     // Do nothing.
 }
 
-void reb_ode_free(struct reb_ode* ode){
+void reb_free_ode(struct reb_ode* ode){
     // Free data array
     free(ode->y1);
     ode->y1 = NULL;
@@ -760,17 +767,33 @@ void reb_ode_free(struct reb_ode* ode){
         free(ode->yDot);
         ode->yDot = NULL;
     }
+    
+    struct reb_simulation* r = ode->r;
+    struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
+    int shift = 0;
+    for (int s=0; s < r->odes_N; s++){
+        if (&r->odes[s] == ode){
+            r->odes_N--;
+            shift = 1;
+        }
+        if (shift && s <= r->odes_N ){
+            r->odes[s] = r->odes[s+1];
+        }
+    }
+    if (ri_bs->nbody_ode == ode){
+        ri_bs->nbody_ode = NULL;
+    }
 }
 
 
-void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
-    if (ri_bs->N){
-        for (int s=0; s < ri_bs->N; s++){
-            reb_ode_free(&ri_bs->odes[s]);
-        }
-        free(ri_bs->odes);
-        ri_bs->N = 0;
-        ri_bs->allocatedN = 0;
+
+void reb_integrator_bs_reset(struct reb_simulation* r){
+    struct reb_simulation_integrator_bs* ri_bs = &(r->ri_bs);
+    
+    // Delete nbody ode but not others
+    if (ri_bs->nbody_ode){
+        reb_free_ode(ri_bs->nbody_ode);
+        ri_bs->nbody_ode = NULL;
     }
 
     // Free sequence arrays
@@ -796,9 +819,4 @@ void reb_integrator_bs_reset_struct(struct reb_simulation_integrator_bs* ri_bs){
     ri_bs->previousRejected     = 0;
     ri_bs->method               = 1;  // 1== midpoint
         
-}
-
-void reb_integrator_bs_reset(struct reb_simulation* r){
-    struct reb_simulation_integrator_bs* ri_bs = &(r->ri_bs);
-    reb_integrator_bs_reset_struct(ri_bs);
 }
