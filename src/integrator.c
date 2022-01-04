@@ -133,7 +133,12 @@ void reb_integrator_part2(struct reb_simulation* r){
         r->ri_bs.firstOrLastStep = 1;
         while(t*forward < r->t*forward && fabs((r->t - t)/(fabs(r->t)+1e-16))>1e-15){
             if (r->ri_bs.dt_proposed !=0.){
-                dt = MIN(fabs(r->ri_bs.dt_proposed), fabs(r->t - t));
+                double max_dt = fabs(r->t - t);
+                dt = fabs(r->ri_bs.dt_proposed);
+                if (dt > max_dt){ // Don't overshoot N-body timestep
+                    dt = max_dt;
+                    r->ri_bs.firstOrLastStep = 1;
+                }
                 dt *= forward;
             }
             int success = reb_integrator_bs_step(r, dt);
