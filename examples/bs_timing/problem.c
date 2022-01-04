@@ -14,6 +14,9 @@ const double m = 1.;
 
 void derivatives(struct reb_ode* const ode, double* const yDot, const double* const y, const double t){
     const double omega = sqrt(k/m);
+    if (ode->r->integrator == REB_INTEGRATOR_BS){
+        reb_integrator_bs_update_particles(ode->r, NULL);
+    }
     yDot[0] = y[1]; 
     yDot[1] = -omega*omega*y[0];
 }
