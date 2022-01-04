@@ -618,7 +618,7 @@ struct reb_simulation {
     struct reb_simulation_integrator_bs ri_bs;              // The BS struct
 
     // ODEs
-    struct reb_ode* odes;  // all ode sets (includes nbody if BS set as integrator)
+    struct reb_ode** odes;  // all ode sets (includes nbody if BS set as integrator)
     int odes_N;            // number of ode sets
     int odes_allocatedN;   // number of ode sets allocated
     int ode_warnings;

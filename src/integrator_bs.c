@@ -81,7 +81,7 @@ static const int maxIter = 2; // maximal number of iterations for which checks a
 static const int maxChecks = 1; // maximal number of checks for each iteration
 
 
-static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n, const double t0, const double step) {
+static int tryStep(struct reb_ode** odes, const int Ns, const int k, const int n, const double t0, const double step) {
     const double subStep  = step / n;
     double t = t0;
 
@@ -181,10 +181,10 @@ static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n,
     // first substep
     t += subStep;
     for (int s=0; s < Ns; s++){
-        double* y0 = odes[s].y;
-        double* y1 = odes[s].y1;
-        double* y0Dot = odes[s].y0Dot;
-        const int length = odes[s].length;
+        double* y0 = odes[s]->y;
+        double* y1 = odes[s]->y1;
+        double* y0Dot = odes[s]->y0Dot;
+        const int length = odes[s]->length;
         for (int i = 0; i < length; ++i) {
             y1[i] = y0[i] + subStep * y0Dot[i];
         }
@@ -192,12 +192,12 @@ static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n,
 
     // other substeps
     for (int s=0; s < Ns; s++){
-        odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
+        odes[s]->derivatives(odes[s], odes[s]->yDot, odes[s]->y1, t);
     }
     for (int s=0; s < Ns; s++){
-        double* y0 = odes[s].y;
-        double* yTmp = odes[s].yTmp;
-        const int length = odes[s].length;
+        double* y0 = odes[s]->y;
+        double* yTmp = odes[s]->yTmp;
+        const int length = odes[s]->length;
         for (int i = 0; i < length; ++i) {
             yTmp[i] = y0[i];
         }
@@ -206,10 +206,10 @@ static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n,
     for (int j = 1; j < n; ++j) {  // Note: iterating n substeps, not 2n substeps as in Eq. (9.13)
         t += subStep;
         for (int s=0; s < Ns; s++){
-            double* y1 = odes[s].y1;
-            double* yDot = odes[s].yDot;
-            double* yTmp = odes[s].yTmp;
-            const int length = odes[s].length;
+            double* y1 = odes[s]->y1;
+            double* yDot = odes[s]->yDot;
+            double* yTmp = odes[s]->yTmp;
+            const int length = odes[s]->length;
             for (int i = 0; i < length; ++i) {
                 const double middle = y1[i];
                 y1[i]       = yTmp[i] + 2.* subStep * yDot[i];
@@ -218,16 +218,16 @@ static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n,
         }
 
         for (int s=0; s < Ns; s++){
-            odes[s].derivatives(&odes[s], odes[s].yDot, odes[s].y1, t);
+            odes[s]->derivatives(odes[s], odes[s]->yDot, odes[s]->y1, t);
         }
 
         // stability check
         if (j <= maxChecks && k < maxIter) {
             double initialNorm = 0.0;
             for (int s=0; s < Ns; s++){
-                double* y0Dot = odes[s].y0Dot;
-                double* scale = odes[s].scale;
-                const int length = odes[s].length;
+                double* y0Dot = odes[s]->y0Dot;
+                double* scale = odes[s]->scale;
+                const int length = odes[s]->length;
                 for (int l = 0; l < length; ++l) {
                     const double ratio = y0Dot[l] / scale[l];
                     initialNorm += ratio * ratio;
@@ -235,10 +235,10 @@ static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n,
             }
             double deltaNorm = 0.0;
             for (int s=0; s < Ns; s++){
-                double* yDot = odes[s].yDot;
-                double* y0Dot = odes[s].y0Dot;
-                double* scale = odes[s].scale;
-                const int length = odes[s].length;
+                double* yDot = odes[s]->yDot;
+                double* y0Dot = odes[s]->y0Dot;
+                double* scale = odes[s]->scale;
+                const int length = odes[s]->length;
                 for (int l = 0; l < length; ++l) {
                     const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
                     deltaNorm += ratio * ratio;
@@ -253,10 +253,10 @@ static int tryStep(struct reb_ode* odes, const int Ns, const int k, const int n,
 
     // correction of the last substep (at t0 + step)
     for (int s=0; s < Ns; s++){
-        double* y1 = odes[s].y1;
-        double* yTmp = odes[s].yTmp;
-        double* yDot = odes[s].yDot;
-        const int length = odes[s].length;
+        double* y1 = odes[s]->y1;
+        double* yTmp = odes[s]->yTmp;
+        double* yDot = odes[s]->yDot;
+        const int length = odes[s]->length;
         for (int i = 0; i < length; ++i) {
             y1[i] = 0.5 * (yTmp[i] + y1[i] + subStep * yDot[i]); // = 0.25*(y_(2n-1) + 2*y_n(2) + y_(2n+1))     Eq (9.13c)
         }
@@ -385,13 +385,13 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
     double  maxError = DBL_MAX;
 
     int Ns = r->odes_N; // Number of ode sets
-    struct reb_ode* odes = r->odes;
+    struct reb_ode** odes = r->odes;
     double error;
     int reject = 0;
 
     // Check if ODEs have been set up correctly 
     for (int s=0; s < Ns; s++){
-        if (!odes[s].derivatives){
+        if (!odes[s]->derivatives){
             reb_error(r,"A user-specified set of ODEs has not been provided with a derivatives function.");
             r->status = REB_EXIT_ERROR;
             return 0;
@@ -399,16 +399,16 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
     }
     
     for (int s=0; s < Ns; s++){
-        if (odes[s].getscale){
-            odes[s].getscale(&odes[s], odes[s].y, odes[s].y); // initial scaling
+        if (odes[s]->getscale){
+            odes[s]->getscale(odes[s], odes[s]->y, odes[s]->y); // initial scaling
         }else{
-            reb_integrator_bs_default_scale(&odes[s], odes[s].y, odes[s].y, ri_bs->eps_rel, ri_bs->eps_abs);
+            reb_integrator_bs_default_scale(odes[s], odes[s]->y, odes[s]->y, ri_bs->eps_rel, ri_bs->eps_abs);
         }
     }
 
     // first evaluation, at the beginning of the step
     for (int s=0; s < Ns; s++){
-        r->odes[s].derivatives(&(r->odes[s]), r->odes[s].y0Dot, r->odes[s].y, t);
+        odes[s]->derivatives(odes[s], odes[s]->y0Dot, odes[s]->y, t);
     }
 
     const int forward = (dt >= 0.);
@@ -432,11 +432,11 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
         } else {
             for (int s=0; s < Ns; s++){
-                const int length = odes[s].length;
+                const int length = odes[s]->length;
                 for (int i = 0; i < length; ++i) {
-                    double CD = odes[s].y1[i];
-                    odes[s].C[i] = CD;
-                    odes[s].D[k][i] = CD;
+                    double CD = odes[s]->y1[i];
+                    odes[s]->C[i] = CD;
+                    odes[s]->D[k][i] = CD;
                 }
             }
 
@@ -446,11 +446,11 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
                 // extrapolate the state at the end of the step
                 // using last iteration data
                 for (int s=0; s < Ns; s++){
-                    extrapolate(&r->odes[s], ri_bs->coeff, k);
-                    if (odes[s].getscale){
-                        odes[s].getscale(&odes[s], odes[s].y, odes[s].y1);
+                    extrapolate(odes[s], ri_bs->coeff, k);
+                    if (odes[s]->getscale){
+                        odes[s]->getscale(odes[s], odes[s]->y, odes[s]->y1);
                     }else{
-                        reb_integrator_bs_default_scale(&odes[s], odes[s].y, odes[s].y, ri_bs->eps_rel, ri_bs->eps_abs);
+                        reb_integrator_bs_default_scale(odes[s], odes[s]->y, odes[s]->y, ri_bs->eps_rel, ri_bs->eps_abs);
                     }
                 }
 
@@ -458,10 +458,10 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
                 error = 0;
                 long int combined_length = 0;
                 for (int s=0; s < Ns; s++){
-                    const int length = odes[s].length;
+                    const int length = odes[s]->length;
                     combined_length += length;
-                    double * C = odes[s].C;
-                    double * scale = odes[s].scale;
+                    double * C = odes[s]->C;
+                    double * scale = odes[s]->scale;
                     for (int j = 0; j < length; ++j) {
                         const double e = C[j] / scale[j];
                         error = MAX(error, e * e);
@@ -591,9 +591,9 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 #endif
         // Swap arrays
         for (int s=0; s < Ns; s++){
-            double* y_tmp = odes[s].y;
-            odes[s].y = odes[s].y1; 
-            odes[s].y1 = y_tmp; 
+            double* y_tmp = odes[s]->y;
+            odes[s]->y = odes[s]->y1; 
+            odes[s]->y1 = y_tmp; 
         }
 
         int optimalIter;
@@ -669,14 +669,18 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 }
 
 struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
+    struct reb_ode* ode = malloc(sizeof(struct reb_ode));
+    
+    memset(ode, 0, sizeof(struct reb_ode)); // not really necessaery
+
     if (r->odes_allocatedN <= r->odes_N){
         r->odes_allocatedN += 32;
-        r->odes = realloc(r->odes,sizeof(struct reb_ode)*r->odes_allocatedN);
-        memset(&r->odes[r->odes_allocatedN-1], 0, sizeof(struct reb_ode));
+        r->odes = realloc(r->odes,sizeof(struct reb_ode*)*r->odes_allocatedN);
     }
+    
+    r->odes[r->odes_N] = ode;
     r->odes_N += 1;
 
-    struct reb_ode* ode = &r->odes[r->odes_N-1];
 
     ode->r = r; // weak reference
     ode->length = length;
@@ -782,7 +786,7 @@ void reb_free_ode(struct reb_ode* ode){
     struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
     int shift = 0;
     for (int s=0; s < r->odes_N; s++){
-        if (&r->odes[s] == ode){
+        if (r->odes[s] == ode){
             r->odes_N--;
             shift = 1;
         }
@@ -793,6 +797,7 @@ void reb_free_ode(struct reb_ode* ode){
     if (ri_bs->nbody_ode == ode){
         ri_bs->nbody_ode = NULL;
     }
+    free(ode);
 }
 
 
