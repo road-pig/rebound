@@ -681,6 +681,8 @@ struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
     ode->r = r; // weak reference
     ode->length = length;
     ode->allocatedN = length;
+    ode->getscale = NULL;
+    ode->derivatives = NULL;
     ode->D   = malloc(sizeof(double*)*(sequence_length));
     for (int k = 0; k < sequence_length; ++k) {
         ode->D[k]   = malloc(sizeof(double)*length);
