@@ -2067,7 +2067,9 @@ class ODE(Structure):
     def derivatives(self, func):
         self._afp = ODEDER(func)
         self._derivatives = self._afp
-    pass
+    def update_particles(self):
+        clibrebound.reb_integrator_bs_update_particles(self.r, None) 
+
 
 ODE._fields_ = [
                 ("length", c_uint),

@@ -291,17 +291,34 @@ static void extrapolate(const struct reb_ode* ode, double * const coeff, const i
     }
 }
 
+void reb_integrator_bs_update_particles(struct reb_simulation* r, const double* y){
+    if (r==NULL){
+        reb_error(r, "Update particles called without valid simulation pointer.");
+        return;
+    }
+    if (y==0){
+        if (r->ri_bs.nbody_ode){
+            y = r->ri_bs.nbody_ode->y;
+        }else{
+            reb_error(r, "Cannot update particles in sub-step. N-body integration does not seem to be using BS.");
+            return;
+        }
+    }
+    for (int i=0; i<r->N; i++){
+        struct reb_particle* const p = &(r->particles[i]);
+        p->x  = y[i*6+0];
+        p->y  = y[i*6+1];
+        p->z  = y[i*6+2];
+        p->vx = y[i*6+3];
+        p->vy = y[i*6+4];
+        p->vz = y[i*6+5];
+    }
+}
+
+
 static void nbody_derivatives(struct reb_ode* ode, double* const yDot, const double* const y, double const t){
     struct reb_simulation* const r = ode->r;
-    for (int i=0; i<r->N; i++){
-         struct reb_particle* const p = &(r->particles[i]);
-         p->x  = y[i*6+0];
-         p->y  = y[i*6+1];
-         p->z  = y[i*6+2];
-         p->vx = y[i*6+3];
-         p->vy = y[i*6+4];
-         p->vz = y[i*6+5];
-    }
+    reb_integrator_bs_update_particles(r, y);
     reb_update_acceleration(r);
 
     for (int i=0; i<r->N; i++){
@@ -314,8 +331,6 @@ static void nbody_derivatives(struct reb_ode* ode, double* const yDot, const dou
         yDot[i*6+5] = p.az;
     }
 }
-
-
 
 
 void reb_integrator_bs_part1(struct reb_simulation* r){
@@ -733,7 +748,6 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
         }
     }
 
-
     int success = reb_integrator_bs_step(r, r->dt);
     if (success){
         r->t += r->dt;
@@ -741,18 +755,7 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     }
     r->dt = ri_bs->dt_proposed;
 
-    {
-        double* const y = ri_bs->nbody_ode->y; // y might have been swapped
-        for (int i=0; i<r->N; i++){
-            struct reb_particle* const p = &(r->particles[i]);
-            p->x  = y[i*6+0];
-            p->y  = y[i*6+1];
-            p->z  = y[i*6+2];
-            p->vx = y[i*6+3];
-            p->vy = y[i*6+4];
-            p->vz = y[i*6+5];
-        }
-    }
+    reb_integrator_bs_update_particles(r, ri_bs->nbody_ode->y);
 }
 
 void reb_integrator_bs_synchronize(struct reb_simulation* r){
