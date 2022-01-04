@@ -333,6 +333,9 @@ void reb_free_pointers(struct reb_simulation* const r){
         r->extras_cleanup(r);
     }
     free(r->var_config);
+    for (int s=0; s<r->odes_N; s++){
+        r->odes[s]->r = NULL;
+    }
 }
 
 void reb_reset_temporary_pointers(struct reb_simulation* const r){

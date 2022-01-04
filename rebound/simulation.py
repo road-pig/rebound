@@ -2221,7 +2221,7 @@ Simulation._fields_ = [
                 ("ri_janus", reb_simulation_integrator_janus),
                 ("ri_eos", reb_simulation_integrator_eos),
                 ("ri_bs", reb_simulation_integrator_bs),
-                ("_odes", POINTER(ODE)),
+                ("_odes", POINTER(POINTER(ODE))),
                 ("_odes_N", c_int),
                 ("_odes_allocatedN", c_int),
                 ("_odes_warnings", c_int),

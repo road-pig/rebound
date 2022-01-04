@@ -783,19 +783,21 @@ void reb_free_ode(struct reb_ode* ode){
     ode->yDot = NULL;
     
     struct reb_simulation* r = ode->r;
-    struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
-    int shift = 0;
-    for (int s=0; s < r->odes_N; s++){
-        if (r->odes[s] == ode){
-            r->odes_N--;
-            shift = 1;
+    if (r){ // only do this is ode is in a simulation
+        struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
+        int shift = 0;
+        for (int s=0; s < r->odes_N; s++){
+            if (r->odes[s] == ode){
+                r->odes_N--;
+                shift = 1;
+            }
+            if (shift && s <= r->odes_N ){
+                r->odes[s] = r->odes[s+1];
+            }
         }
-        if (shift && s <= r->odes_N ){
-            r->odes[s] = r->odes[s+1];
+        if (ri_bs->nbody_ode == ode){
+            ri_bs->nbody_ode = NULL;
         }
-    }
-    if (ri_bs->nbody_ode == ode){
-        ri_bs->nbody_ode = NULL;
     }
     free(ode);
 }
