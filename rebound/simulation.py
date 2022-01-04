@@ -816,6 +816,13 @@ class Simulation(Structure):
             raise ValueError("Cannot multiply simulation with non-scalars.")
         clibrebound.reb_simulation_imul(byref(self), c_double(scalar_pos), c_double(scalar_vel))
 
+#ODE functions
+    def create_ode(self, length):
+        clibrebound.reb_create_ode.restype = c_void_p
+        ode_p = clibrebound.reb_create_ode(byref(self), c_int(length))
+        ode = ODE.from_address(ode_p)
+        return ode
+
 # Status functions
     def status(self):
         """ 
@@ -2053,12 +2060,30 @@ class reb_simulation_integrator_mercurius(Structure):
             self._Lfp = MERCURIUSLF(func)
             self._L = self._Lfp
 
-class reb_ode_state(Structure):
-    _fields_ = [
-                ("length", c_int),
-                ("t", c_double),
+class ODE(Structure):
+    @property
+    def derivatives(self):
+        raise AttributeError("You can only set C function pointers from python.")
+    @derivatives.setter
+    def derivatives(self, func):
+        self._afp = ODEDER(func)
+        self._derivatives = self._afp
+    pass
+
+ODE._fields_ = [
+                ("length", c_uint),
+                ("allocatedN", c_uint),
                 ("y", POINTER(c_double)),
-                ("derivatives", c_void_p),
+                ("_scale", POINTER(c_double)),
+                ("_C", POINTER(c_double)),
+                ("_D", POINTER(POINTER(c_double))),
+                ("_y1", POINTER(c_double)),
+                ("_y0Dot", POINTER(c_double)),
+                ("_yDot", POINTER(c_double)),
+                ("_yTmp", POINTER(c_double)),
+                ("_derivatives", CFUNCTYPE(None,POINTER(ODE), POINTER(c_double), POINTER(c_double), c_double)),
+                ("_getscale", CFUNCTYPE(None,POINTER(ODE), POINTER(c_double), POINTER(c_double))),
+                ("r", POINTER(Simulation)),
                 ("ref", c_void_p),
             ]               
 
@@ -2068,28 +2093,20 @@ class reb_simulation_integrator_bs(Structure):
     It controls the behaviour of the Gragg-Bulirsch-Stoer integrator.
     """
     _fields_ = [
-                ("state", reb_ode_state),
-                ("state_user", reb_ode_state),
-                ("allocatedN", c_uint),
-                ("y", POINTER(c_double)),
-                ("y1", POINTER(c_double)),
-                ("C", POINTER(POINTER(c_double))),
-                ("D", POINTER(POINTER(c_double))),
-                ("scale", POINTER(c_double)),
-                ("y0Dot", POINTER(c_double)),
+                ("nbody_ode", POINTER(ODE)),
                 ("sequence", POINTER(c_int)),
                 ("costPerStep", POINTER(c_int)),
                 ("costPerTimeUnit", POINTER(c_double)),
                 ("optimalStep", POINTER(c_double)),
-                ("coeff", POINTER(POINTER(c_double))),
-                ("scalAbsoluteTolerance", c_double),
-                ("scalRelativeTolerance", c_double),
-                ("minStep", c_double),
-                ("maxStep", c_double),
+                ("coeff", POINTER(c_double)),
+                ("eps_abs", c_double),
+                ("eps_rel", c_double),
+                ("min_dt", c_double),
+                ("max_dt", c_double),
+                ("dt_proposed", c_double),
                 ("firstOrLastStep", c_int),
                 ("previousRejected", c_int),
-                ("method", c_int),
-                ("hNew", c_double),
+                ("targetIter", c_int),
             ]               
 
 class timeval(Structure):
@@ -2205,6 +2222,10 @@ Simulation._fields_ = [
                 ("ri_janus", reb_simulation_integrator_janus),
                 ("ri_eos", reb_simulation_integrator_eos),
                 ("ri_bs", reb_simulation_integrator_bs),
+                ("_odes", POINTER(ODE)),
+                ("_odes_N", c_int),
+                ("_odes_allocatedN", c_int),
+                ("_odes_warnings", c_int),
                 ("_additional_forces", CFUNCTYPE(None,POINTER(Simulation))),
                 ("_pre_timestep_modifications", CFUNCTYPE(None,POINTER(Simulation))),
                 ("_post_timestep_modifications", CFUNCTYPE(None,POINTER(Simulation))),
@@ -2236,6 +2257,8 @@ Particle._fields_ = [("x", c_double),
 
 POINTER_REB_SIM = POINTER(Simulation) 
 AFF = CFUNCTYPE(None,POINTER_REB_SIM)
+ODEDER = CFUNCTYPE(None,POINTER(ODE), POINTER(c_double), POINTER(c_double), c_double)
+ODESCALE = CFUNCTYPE(None,POINTER(ODE), POINTER(c_double), POINTER(c_double))
 CORFF = CFUNCTYPE(c_double,POINTER_REB_SIM, c_double)
 COLRFF = CFUNCTYPE(c_int, POINTER_REB_SIM, reb_collision)
 MERCURIUSLF = CFUNCTYPE(c_double, POINTER_REB_SIM, c_double, c_double)

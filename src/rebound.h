@@ -217,11 +217,7 @@ struct reb_simulation_integrator_whfast {
 };
 
 struct reb_ode{ // defines an ODE 
-    int length; // number of components / dimenion
-    void (*derivatives)(struct reb_ode* const ode, double* const yDot, const double* const y, const double t); // right hand side 
-    void (*getscale)(struct reb_ode* const ode, const double* const y0, const double* const y1); // right hand side 
-    struct reb_simulation* r; // weak reference to main simulation 
-    void* ref;  // pointer to any additional data needed for derivatives
+    unsigned int length; // number of components / dimenion
     unsigned int allocatedN;
     double* y;      // Current state 
     double* scale;
@@ -231,6 +227,10 @@ struct reb_ode{ // defines an ODE
     double* y0Dot;  // Temporary internal array (derivatives at beginning of step)
     double* yDot;   // Temporary internal array (derivatives)
     double* yTmp;   // Temporary internal array (midpoint method)
+    void (*derivatives)(struct reb_ode* const ode, double* const yDot, const double* const y, const double t); // right hand side 
+    void (*getscale)(struct reb_ode* const ode, const double* const y0, const double* const y1); // right hand side 
+    struct reb_simulation* r; // weak reference to main simulation 
+    void* ref;  // pointer to any additional data needed for derivatives
 };
 
 
@@ -241,10 +241,10 @@ struct reb_simulation_integrator_bs {
     double* costPerTimeUnit; // cost per unit step.
     double* optimalStep; // optimal steps for each order. 
     double* coeff;    // extrapolation coefficients.
-    double scalAbsoluteTolerance; // Allowed absolute scalar error.
-    double scalRelativeTolerance; // Allowed relative scalar error.
-    double minStep;
-    double maxStep;
+    double eps_abs; // Allowed absolute scalar error.
+    double eps_rel; // Allowed relative scalar error.
+    double min_dt;
+    double max_dt;
     double dt_proposed;
     int firstOrLastStep;
     int previousRejected;

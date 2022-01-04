@@ -377,7 +377,7 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
     // initial order selection
     if (ri_bs->targetIter == 0){
-        const double tol    = ri_bs->scalRelativeTolerance;
+        const double tol    = ri_bs->eps_rel;
         const double log10R = log10(MAX(1.0e-10, tol));
         ri_bs->targetIter = MAX(1, MIN(sequence_length - 2, (int) floor(0.5 - 0.6 * log10R)));
     }
@@ -402,7 +402,7 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
         if (odes[s].getscale){
             odes[s].getscale(&odes[s], odes[s].y, odes[s].y); // initial scaling
         }else{
-            reb_integrator_bs_default_scale(&odes[s], odes[s].y, odes[s].y, ri_bs->scalRelativeTolerance, ri_bs->scalAbsoluteTolerance);
+            reb_integrator_bs_default_scale(&odes[s], odes[s].y, odes[s].y, ri_bs->eps_rel, ri_bs->eps_abs);
         }
     }
 
@@ -450,7 +450,7 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
                     if (odes[s].getscale){
                         odes[s].getscale(&odes[s], odes[s].y, odes[s].y1);
                     }else{
-                        reb_integrator_bs_default_scale(&odes[s], odes[s].y, odes[s].y, ri_bs->scalRelativeTolerance, ri_bs->scalAbsoluteTolerance);
+                        reb_integrator_bs_default_scale(&odes[s], odes[s].y, odes[s].y, ri_bs->eps_rel, ri_bs->eps_abs);
                     }
                 }
 
@@ -644,13 +644,13 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
     dt = fabs(dt);
 
-    if (ri_bs->minStep !=0.0 && dt < ri_bs->minStep) {
-        dt = ri_bs->minStep;
+    if (ri_bs->min_dt !=0.0 && dt < ri_bs->min_dt) {
+        dt = ri_bs->min_dt;
         reb_warning(r,"Minimal stepsize reached during ODE integration.");
     }
 
-    if (ri_bs->maxStep !=0.0 && dt > ri_bs->maxStep) {
-        dt = ri_bs->maxStep;
+    if (ri_bs->max_dt !=0.0 && dt > ri_bs->max_dt) {
+        dt = ri_bs->max_dt;
         reb_warning(r,"Maximum stepsize reached during ODE integration.");
     }
 
@@ -670,7 +670,7 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
 struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
     if (r->odes_allocatedN <= r->odes_N){
-        r->odes_allocatedN += 1;
+        r->odes_allocatedN += 32;
         r->odes = realloc(r->odes,sizeof(struct reb_ode)*r->odes_allocatedN);
         memset(&r->odes[r->odes_allocatedN-1], 0, sizeof(struct reb_ode));
     }
@@ -686,14 +686,14 @@ struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
         ode->D[k]   = malloc(sizeof(double)*length);
     }
 
-    ode->C     = realloc(ode->C, sizeof(double)*length);
-    ode->y     = realloc(ode->y, sizeof(double)*length);
-    ode->y1    = realloc(ode->y1, sizeof(double)*length);
-    ode->y0Dot = realloc(ode->y0Dot, sizeof(double)*length);
-    ode->yTmp  = realloc(ode->yTmp, sizeof(double)*length);
-    ode->yDot  = realloc(ode->yDot, sizeof(double)*length);
+    ode->C     = malloc(sizeof(double)*length);
+    ode->y     = malloc(sizeof(double)*length);
+    ode->y1    = malloc(sizeof(double)*length);
+    ode->y0Dot = malloc(sizeof(double)*length);
+    ode->yTmp  = malloc(sizeof(double)*length);
+    ode->yDot  = malloc(sizeof(double)*length);
 
-    ode->scale = realloc(ode->scale, sizeof(double)*length);
+    ode->scale = malloc(sizeof(double)*length);
 
     r->ri_bs.firstOrLastStep = 1;
 
@@ -825,11 +825,11 @@ void reb_integrator_bs_reset(struct reb_simulation* r){
     
     
     // Default settings
-    ri_bs->scalAbsoluteTolerance= 1e-5;
-    ri_bs->scalRelativeTolerance= 1e-5;
-    ri_bs->maxStep              = 0;
-    ri_bs->minStep              = 0; 
-    ri_bs->firstOrLastStep      = 1;
-    ri_bs->previousRejected     = 0;
+    ri_bs->eps_abs          = 1e-5;
+    ri_bs->eps_rel          = 1e-5;
+    ri_bs->max_dt           = 0;
+    ri_bs->min_dt           = 0; 
+    ri_bs->firstOrLastStep  = 1;
+    ri_bs->previousRejected = 0;
         
 }
