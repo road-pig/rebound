@@ -818,10 +818,9 @@ class Simulation(Structure):
 
 #ODE functions
     def create_ode(self, length):
-        clibrebound.reb_create_ode.restype = c_void_p
+        clibrebound.reb_create_ode.restype = POINTER(ODE)
         ode_p = clibrebound.reb_create_ode(byref(self), c_int(length))
-        ode = ODE.from_address(ode_p)
-        return ode
+        return ODE.from_address(ctypes.addressof(ode_p.contents))
 
 # Status functions
     def status(self):

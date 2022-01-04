@@ -769,18 +769,12 @@ void reb_free_ode(struct reb_ode* ode){
         free(ode->D);
         ode->D = NULL;
     }
-    if (ode->y0Dot){
-        free(ode->y0Dot);
-        ode->y0Dot = NULL;
-    }
-    if (ode->yTmp){
-        free(ode->yTmp);
-        ode->yTmp = NULL;
-    }
-    if (ode->yDot){
-        free(ode->yDot);
-        ode->yDot = NULL;
-    }
+    free(ode->y0Dot);
+    ode->y0Dot = NULL;
+    free(ode->yTmp);
+    ode->yTmp = NULL;
+    free(ode->yDot);
+    ode->yDot = NULL;
     
     struct reb_simulation* r = ode->r;
     struct reb_simulation_integrator_bs* ri_bs = &r->ri_bs;
@@ -807,7 +801,6 @@ void reb_integrator_bs_reset(struct reb_simulation* r){
     // Delete nbody ode but not others
     if (ri_bs->nbody_ode){
         reb_free_ode(ri_bs->nbody_ode);
-        ri_bs->nbody_ode = NULL;
     }
 
     // Free sequence arrays
