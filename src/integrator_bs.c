@@ -368,7 +368,7 @@ static void allocate_sequence_arrays(struct reb_simulation_integrator_bs* ri_bs)
     }
 }
 
-static void reb_integrator_bs_default_scale(struct reb_ode* ode, double* y1, double* y2, double absTol, double relTol){
+static void reb_integrator_bs_default_scale(struct reb_ode* ode, double* y1, double* y2, double relTol, double absTol){
     double* scale = ode->scale;
     int length = ode->length;
     for (int i = 0; i < length; i++) {
