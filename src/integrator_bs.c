@@ -224,15 +224,6 @@ static int tryStep(struct reb_ode** odes, const int Ns, const int k, const int n
         // stability check
         if (j <= maxChecks && k < maxIter) {
             double initialNorm = 0.0;
-            for (int s=0; s < Ns; s++){
-                double* y0Dot = odes[s]->y0Dot;
-                double* scale = odes[s]->scale;
-                const int length = odes[s]->length;
-                for (int l = 0; l < length; ++l) {
-                    const double ratio = y0Dot[l] / scale[l];
-                    initialNorm += ratio * ratio;
-                }
-            }
             double deltaNorm = 0.0;
             for (int s=0; s < Ns; s++){
                 double* yDot = odes[s]->yDot;
@@ -240,8 +231,10 @@ static int tryStep(struct reb_ode** odes, const int Ns, const int k, const int n
                 double* scale = odes[s]->scale;
                 const int length = odes[s]->length;
                 for (int l = 0; l < length; ++l) {
-                    const double ratio = (yDot[l] - y0Dot[l]) / scale[l];
-                    deltaNorm += ratio * ratio;
+                    const double ratio1 = y0Dot[l] / scale[l];
+                    initialNorm += ratio1 * ratio1;
+                    const double ratio2 = (yDot[l] - y0Dot[l]) / scale[l];
+                    deltaNorm += ratio2 * ratio2;
                 }
             }
             if (deltaNorm > 4 * MAX(1.0e-15, initialNorm)) {
