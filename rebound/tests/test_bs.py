@@ -1,0 +1,61 @@
+import rebound
+import unittest
+import math
+import rebound.data
+import warnings
+    
+    
+class TestIntegratorBS(unittest.TestCase):
+    def test_bs_outersolarsystem(self):
+        for eps in [1e-5, 1e-7, 1e-9, 1e-11]:
+            sim = rebound.Simulation()
+            rebound.data.add_outer_solar_system(sim)
+            sim.integrator = "bs"
+            sim.ri_bs.eps_rel = eps
+            sim.ri_bs.eps_abs = eps
+            e0 = sim.calculate_energy()
+            sim.integrate(1000)
+            e1 = sim.calculate_energy()
+            self.assertLess(math.fabs((e0-e1)/e1),5*eps)
+
+    def test_bs_high_e(self):
+        for eps in [1e-7, 1e-9, 1e-11]:
+            sim = rebound.Simulation()
+            sim.add(m=1)
+            sim.add(m=1e-3,a=1,e=0.9)
+            sim.add(m=1e-3,a=6,e=0.9,f=0.5,omega=1.6)
+            sim.integrator = "bs"
+            sim.ri_bs.eps_rel = eps
+            sim.ri_bs.eps_abs = eps
+            e0 = sim.calculate_energy()
+            sim.integrate(1000)
+            e1 = sim.calculate_energy()
+            self.assertLess(math.fabs((e0-e1)/e1),60*eps)
+    
+    def test_bs_inout(self):
+        sim = rebound.Simulation()
+        rebound.data.add_outer_solar_system(sim)
+        eps = 1e-6
+        sim.integrator = "bs"
+        sim.ri_bs.eps_rel = eps
+        sim.ri_bs.eps_abs = eps
+        sim.save("sim0.bin")
+        sim1 = rebound.Simulation("sim0.bin")
+        sim.integrate(100)
+        sim1.integrate(100)
+        sim1.save("sim1.bin")
+        sim2 = rebound.Simulation("sim1.bin")
+        sim.integrate(200)
+        sim1.integrate(200)
+        sim2.integrate(200)
+        self.assertEqual(sim.particles[1].x, sim1.particles[1].x)
+        self.assertEqual(sim.particles[1].x, sim2.particles[1].x)
+        self.assertEqual(sim.particles[2].vx, sim1.particles[2].vx)
+        self.assertEqual(sim.particles[2].vx, sim2.particles[2].vx)
+        self.assertEqual(sim.t, sim1.t)
+        self.assertEqual(sim.t, sim2.t)
+
+
+
+if __name__ == "__main__":
+    unittest.main()
