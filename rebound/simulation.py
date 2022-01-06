@@ -2065,8 +2065,9 @@ class ODE(Structure):
         raise AttributeError("You can only set C function pointers from python.")
     @derivatives.setter
     def derivatives(self, func):
-        self._afp = ODEDER(func)
-        self._derivatives = self._afp
+        self._dfp = ODEDER(func)
+        func.argtypes = self._dfp.argtypes # I do not understand why this is needed
+        self._derivatives = self._dfp
     def update_particles(self):
         clibrebound.reb_integrator_bs_update_particles(self.r, None) 
 
