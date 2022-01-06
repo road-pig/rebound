@@ -56,6 +56,21 @@ class TestIntegratorBS(unittest.TestCase):
         self.assertEqual(sim.t, sim2.t)
 
 
+    def test_bs_archive(self):
+        sim = rebound.Simulation()
+        sim.integrator = "BS"
+        sim.add(m=1)
+        sim.add(m=1e-3,a=1,e=0.1)
+        sim.add(m=1e-3,a=2,e=0.1)
+        sim.automateSimulationArchive("test.sa",interval=10)
+        sim.integrate(100, exact_finish_time=0)
+        sim1 = rebound.SimulationArchive("test.sa")[-1]
+        sim.integrate(200, exact_finish_time=0)
+        sim1.integrate(200, exact_finish_time=0)
+        self.assertEqual(sim.particles[1].x, sim1.particles[1].x)
+        self.assertEqual(sim.particles[2].vx, sim1.particles[2].vx)
+        self.assertEqual(sim.t, sim1.t)
+
 
 if __name__ == "__main__":
     unittest.main()
