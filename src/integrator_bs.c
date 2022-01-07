@@ -80,10 +80,32 @@ static const double stabilityReduction = 0.5;
 static const int maxIter = 2; // maximal number of iterations for which checks are performed
 static const int maxChecks = 1; // maximal number of checks for each iteration
 
+void reb_integrator_bs_update_particles(struct reb_simulation* r, const double* y){
+    if (r==NULL){
+        reb_error(r, "Update particles called without valid simulation pointer.");
+        return;
+    }
+    if (y==NULL){
+        reb_error(r, "Update particles called without valid y pointer.");
+        return;
+    }
+    for (int i=0; i<r->N; i++){
+        struct reb_particle* const p = &(r->particles[i]);
+        p->x  = y[i*6+0];
+        p->y  = y[i*6+1];
+        p->z  = y[i*6+2];
+        p->vx = y[i*6+3];
+        p->vy = y[i*6+4];
+        p->vz = y[i*6+5];
+    }
+}
 
-static int tryStep(struct reb_ode** odes, const int Ns, const int k, const int n, const double t0, const double step) {
+
+static int tryStep(struct reb_simulation* r, const int Ns, const int k, const int n, const double t0, const double step) {
+    struct reb_ode** odes = r->odes;
     const double subStep  = step / n;
     double t = t0;
+    int needs_nbody = r->ri_bs.user_ode_needs_nbody;
 
     // LeapFrog Method did not seem to be of any advantage 
     //    switch (method) {
@@ -191,6 +213,9 @@ static int tryStep(struct reb_ode** odes, const int Ns, const int k, const int n
     }
 
     // other substeps
+    if (needs_nbody){
+        reb_integrator_bs_update_particles(r, r->ri_bs.nbody_ode->y1);
+    }
     for (int s=0; s < Ns; s++){
         odes[s]->derivatives(odes[s], odes[s]->yDot, odes[s]->y1, t);
     }
@@ -217,6 +242,9 @@ static int tryStep(struct reb_ode** odes, const int Ns, const int k, const int n
             }
         }
 
+        if (needs_nbody){
+            reb_integrator_bs_update_particles(r, r->ri_bs.nbody_ode->y1);
+        }
         for (int s=0; s < Ns; s++){
             odes[s]->derivatives(odes[s], odes[s]->yDot, odes[s]->y1, t);
         }
@@ -281,30 +309,6 @@ static void extrapolate(const struct reb_ode* ode, double * const coeff, const i
         for (int i = 0; i < length; ++i) {
         y1[i] += D[j][i];
         }
-    }
-}
-
-void reb_integrator_bs_update_particles(struct reb_simulation* r, const double* y){
-    if (r==NULL){
-        reb_error(r, "Update particles called without valid simulation pointer.");
-        return;
-    }
-    if (y==0){
-        if (r->ri_bs.nbody_ode){
-            y = r->ri_bs.nbody_ode->y;
-        }else{
-            reb_error(r, "Cannot update particles in sub-step. N-body integration does not seem to be using BS.");
-            return;
-        }
-    }
-    for (int i=0; i<r->N; i++){
-        struct reb_particle* const p = &(r->particles[i]);
-        p->x  = y[i*6+0];
-        p->y  = y[i*6+1];
-        p->z  = y[i*6+2];
-        p->vx = y[i*6+3];
-        p->vy = y[i*6+4];
-        p->vz = y[i*6+5];
     }
 }
 
@@ -428,7 +432,7 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
         ++k;
         
         // modified midpoint integration with the current substep
-        if ( ! tryStep(r->odes, Ns, k, ri_bs->sequence[k], t, dt)) {
+        if ( ! tryStep(r, Ns, k, ri_bs->sequence[k], t, dt)) {
 
             // the stability check failed, we reduce the global step
 #if DEBUG
@@ -692,6 +696,7 @@ struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
 
     ode->r = r; // weak reference
     ode->length = length;
+    ode->needs_nbody = 1;
     ode->allocatedN = length;
     ode->getscale = NULL;
     ode->derivatives = NULL;
@@ -725,20 +730,25 @@ void reb_integrator_bs_part2(struct reb_simulation* r){
     if (ri_bs->nbody_ode == NULL){ 
         ri_bs->nbody_ode = reb_create_ode(r, nbody_length);
         ri_bs->nbody_ode->derivatives = nbody_derivatives;
+        ri_bs->nbody_ode->needs_nbody = 0; // No need to update unless there's another ode
         ri_bs->firstOrLastStep = 1;
     }
-
-    {
-        double* const y = ri_bs->nbody_ode->y;
-        for (int i=0; i<r->N; i++){
-            const struct reb_particle p = r->particles[i];
-            y[i*6+0] = p.x;
-            y[i*6+1] = p.y;
-            y[i*6+2] = p.z;
-            y[i*6+3] = p.vx;
-            y[i*6+4] = p.vy;
-            y[i*6+5] = p.vz;
+    
+    for (int s=0; s < r->odes_N; s++){
+        if (r->odes[s]->needs_nbody){
+            ri_bs->user_ode_needs_nbody = 1;
         }
+    }
+
+    double* const y = ri_bs->nbody_ode->y;
+    for (int i=0; i<r->N; i++){
+        const struct reb_particle p = r->particles[i];
+        y[i*6+0] = p.x;
+        y[i*6+1] = p.y;
+        y[i*6+2] = p.z;
+        y[i*6+3] = p.vx;
+        y[i*6+4] = p.vy;
+        y[i*6+5] = p.vz;
     }
 
     int success = reb_integrator_bs_step(r, r->dt);

@@ -817,9 +817,10 @@ class Simulation(Structure):
         clibrebound.reb_simulation_imul(byref(self), c_double(scalar_pos), c_double(scalar_vel))
 
 #ODE functions
-    def create_ode(self, length):
+    def create_ode(self, length, needs_nbody=True):
         clibrebound.reb_create_ode.restype = POINTER(ODE)
         ode_p = clibrebound.reb_create_ode(byref(self), c_int(length))
+        ode_p.contents.needs_nbody = c_int(needs_nbody)
         return ODE.from_address(ctypes.addressof(ode_p.contents))
 
 # Status functions
@@ -2075,6 +2076,7 @@ class ODE(Structure):
 ODE._fields_ = [
                 ("length", c_uint),
                 ("allocatedN", c_uint),
+                ("needs_nbody", c_int),
                 ("y", POINTER(c_double)),
                 ("_scale", POINTER(c_double)),
                 ("_C", POINTER(c_double)),
@@ -2095,20 +2097,21 @@ class reb_simulation_integrator_bs(Structure):
     It controls the behaviour of the Gragg-Bulirsch-Stoer integrator.
     """
     _fields_ = [
-                ("nbody_ode", POINTER(ODE)),
-                ("sequence", POINTER(c_int)),
-                ("costPerStep", POINTER(c_int)),
-                ("costPerTimeUnit", POINTER(c_double)),
-                ("optimalStep", POINTER(c_double)),
-                ("coeff", POINTER(c_double)),
+                ("_nbody_ode", POINTER(ODE)),
+                ("_sequence", POINTER(c_int)),
+                ("_costPerStep", POINTER(c_int)),
+                ("_costPerTimeUnit", POINTER(c_double)),
+                ("_optimalStep", POINTER(c_double)),
+                ("_coeff", POINTER(c_double)),
                 ("eps_abs", c_double),
                 ("eps_rel", c_double),
                 ("min_dt", c_double),
                 ("max_dt", c_double),
                 ("dt_proposed", c_double),
-                ("firstOrLastStep", c_int),
-                ("previousRejected", c_int),
-                ("targetIter", c_int),
+                ("_firstOrLastStep", c_int),
+                ("_previousRejected", c_int),
+                ("_targetIter", c_int),
+                ("_user_ode_needs_nbody", c_int),
             ]               
 
 class timeval(Structure):

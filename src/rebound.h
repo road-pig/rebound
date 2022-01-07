@@ -219,6 +219,7 @@ struct reb_simulation_integrator_whfast {
 struct reb_ode{ // defines an ODE 
     unsigned int length; // number of components / dimenion
     unsigned int allocatedN;
+    unsigned int needs_nbody;
     double* y;      // Current state 
     double* scale;
     double* C;      // Temporary internal array (extrapolation) 
@@ -249,6 +250,7 @@ struct reb_simulation_integrator_bs {
     int firstOrLastStep;
     int previousRejected;
     int targetIter;
+    int user_ode_needs_nbody; // Do not set manually. Use needs_nbody in reb_ode instead.
 };
 
 enum REB_EOS_TYPE {
@@ -754,7 +756,6 @@ enum reb_input_binary_messages {
 // ODE functions
 struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length);
 void reb_free_ode(struct reb_ode* ode);
-void reb_integrator_bs_update_particles(struct reb_simulation* r, const double* const y);
 
 // Miscellaneous functions
 uint32_t reb_hash(const char* str);
