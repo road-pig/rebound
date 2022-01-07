@@ -199,9 +199,9 @@ The setting for WHFast are stored in the `reb_simulation_integrator_whfast` stru
 All other members of the `reb_simulation_integrator_whfast` structure are for internal use only.
 
 ## Gragg-Bulirsch-Stoer (BS)
-The Gragg-Bulirsch-Stoer integrator, short BS for Bulirsch-Stoer, is an adaptive integrator which uses Richardson extrapolation and the modified midpoint method to obtain solutions to ordinary differential equations.
+The Gragg-Bulirsch-Stoer integrator (short BS for Bulirsch-Stoer) is an adaptive integrator which uses Richardson extrapolation and the modified midpoint method to obtain solutions to ordinary differential equations.
 
-The specific version in REBOUND is based on the method described in Hairer, Norsett, and Wanner 1993 (see section II.9, page 224ff), specifically, the JAVA implementation of this algorithm in the [Hipparchus package](https://github.com/Hipparchus-Math/hipparchus/blob/master/hipparchus-ode/src/main/java/org/hipparchus/ode/nonstiff/GraggBulirschStoerIntegrator.java).
+The version in REBOUND is based on the method described in Hairer, Norsett, and Wanner 1993 (see section II.9, page 224ff), specifically the JAVA implementation available in the [Hipparchus package](https://github.com/Hipparchus-Math/hipparchus/blob/master/hipparchus-ode/src/main/java/org/hipparchus/ode/nonstiff/GraggBulirschStoerIntegrator.java). The Hipparchus as well as the REBOUND version are adaptive in both the timestep and the order of the method for optimal performance. 
 
 The BS integrator is particularly useful for short integrations where only medium accuracy is required. For long integrations a symplectic integrator such as WHFast performs better. For high accuracy integrations the IAS15 integrator performs better. Because it is adaptive, it can handle close encounters.
 
@@ -228,7 +228,7 @@ The BS integrator tries to keep the error of each coordinate $y$ below $\epsilon
     !!! Info
         The code does not guarantee that the errors remain below the tolerances. In particular, note that BS is not a symplectic integrator which results in errors growing linearly in time (phase errors grow quadratically in time). It requires some experimentation to find the tolerances that offer the best compromise between accuracy and speed for your specific problem. 
 
-Compared to all the other integrators in REBOUND, BS can be used to integrate arbitrary ordinary differential equations (ODEs), not just the N-body problem. We expose an ODE-API in REBOUND which allows you to make use of this. User-defined ODEs are always integrated with BS. You can choose to integrate the N-body equations with BS as well, or any of the other integrators. 
+Compared to the other integrators in REBOUND, BS can be used to integrate arbitrary ordinary differential equations (ODEs), not just the N-body problem. We expose an ODE-API in REBOUND which allows you to make use of this. User-defined ODEs are always integrated with BS. You can choose to integrate the N-body equations with BS as well, or any of the other integrators. 
 
 If you choose BS for the N-body equations, then BS will treat all ODEs (N-body + all user-defined ones) as one big system of coupled ODEs. This means your timestep will be set by either the N-body problem or the user-defined ODEs, whichever involves the shorter timescale.
 

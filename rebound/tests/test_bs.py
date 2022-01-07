@@ -62,7 +62,7 @@ class TestIntegratorBS(unittest.TestCase):
         sim.add(m=1)
         sim.add(m=1e-3,a=1,e=0.1)
         sim.add(m=1e-3,a=2,e=0.1)
-        sim.automateSimulationArchive("test.sa",interval=10)
+        sim.automateSimulationArchive("test.sa",interval=10, deletefile=True)
         sim.integrate(100, exact_finish_time=0)
         sim1 = rebound.SimulationArchive("test.sa")[-1]
         sim.integrate(200, exact_finish_time=0)

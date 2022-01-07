@@ -59,6 +59,7 @@
 #include <string.h> // memset
 #include <float.h> // for DBL_MAX
 #include "rebound.h"
+#include "gravity.h"
 #include "integrator_bs.h"
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -315,8 +316,16 @@ static void extrapolate(const struct reb_ode* ode, double * const coeff, const i
 
 static void nbody_derivatives(struct reb_ode* ode, double* const yDot, const double* const y, double const t){
     struct reb_simulation* const r = ode->r;
-    reb_integrator_bs_update_particles(r, y);
-    reb_update_acceleration(r);
+    if (r->t != t) { 
+        // Not needed for first step. Accelerations already calculated. Just need to copy them
+        reb_integrator_bs_update_particles(r, y);
+        reb_update_acceleration(r);
+        if (r->N_var){ // Fore futre. Currently not implemented yet.
+            reb_calculate_acceleration_var(r);
+        }
+        // Calculate non-gravity accelerations. 
+        if (r->additional_forces) r->additional_forces(r);
+    }
 
     for (int i=0; i<r->N; i++){
         const struct reb_particle p = r->particles[i];
@@ -722,8 +731,10 @@ struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
 void reb_integrator_bs_part2(struct reb_simulation* r){
     struct reb_simulation_integrator_bs* ri_bs = &(r->ri_bs);
     
-    if (r->status==REB_RUNNING_LAST_STEP){
-        ri_bs->firstOrLastStep = 1;
+    if (r->var_config_N){
+        reb_error(r, "The BS integrator does currently not support variational equations.");
+        r->status = REB_EXIT_ERROR;
+        return; // Error
     }
     
     int nbody_length = r->N*3*2;
