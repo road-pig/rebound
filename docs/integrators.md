@@ -203,7 +203,7 @@ The Gragg-Bulirsch-Stoer integrator (short BS for Bulirsch-Stoer) is an adaptive
 
 The version in REBOUND is based on the method described in Hairer, Norsett, and Wanner 1993 (see section II.9, page 224ff), specifically the JAVA implementation available in the [Hipparchus package](https://github.com/Hipparchus-Math/hipparchus/blob/master/hipparchus-ode/src/main/java/org/hipparchus/ode/nonstiff/GraggBulirschStoerIntegrator.java). The Hipparchus as well as the REBOUND version are adaptive in both the timestep and the order of the method for optimal performance. 
 
-The BS integrator is particularly useful for short integrations where only medium accuracy is required. For long integrations a symplectic integrator such as WHFast performs better. For high accuracy integrations the IAS15 integrator performs better. Because it is adaptive, it can handle close encounters.
+The BS integrator is particularly useful for short integrations where only medium accuracy is required. For long integrations a symplectic integrator such as WHFast performs better. For high accuracy integrations the IAS15 integrator performs better. Because BS is adaptive, it can handle close encounters. Currently a collision search is only performed after every timestep, i.e. not after a sub-timestep.
 
 The following code enables the BS integrator and sets both the relative and absolute tolerances to 0.0001:
 
@@ -225,7 +225,7 @@ The following code enables the BS integrator and sets both the relative and abso
 
 The BS integrator tries to keep the error of each coordinate $y$ below $\epsilon_{abs} + \epsilon_{rel} \cdot  \left|y\right|$. Note that this applies to both position and velocity coordinates of all particles which implues that the code units you're choosing for the integration matter. If you need fine control over the scales used internally, you can set the `getscale` function pointer in `r->ri_bs.nbody_ode` (this is currently undocumented, search the source code for `getscale` to find out more).
 
-    !!! Info
+!!! Info
         The code does not guarantee that the errors remain below the tolerances. In particular, note that BS is not a symplectic integrator which results in errors growing linearly in time (phase errors grow quadratically in time). It requires some experimentation to find the tolerances that offer the best compromise between accuracy and speed for your specific problem. 
 
 
