@@ -14,10 +14,6 @@ const double m = 1.;
 
 void derivatives(struct reb_ode* const ode, double* const yDot, const double* const y, const double t){
     const double omega = sqrt(k/m);
-    if (ode->r->integrator == REB_INTEGRATOR_BS){
-        reb_integrator_bs_update_particles(ode->r, NULL);
-    }
-
     struct reb_orbit o = reb_tools_particle_to_orbit(ode->r->G, ode->r->particles[1], ode->r->particles[0]);
     double forcing = sin(o.f);
     yDot[0] = y[1]; 
