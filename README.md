@@ -25,7 +25,8 @@ REBOUND is an N-body integrator, i.e. a software package that can integrate the 
 * Symplectic integrators (WHFast, SEI, LEAPFROG, EOS)
 * High order symplectic integrators for integrating planetary systems (SABA, WH Kernel methods)
 * Hybrid symplectic integrators for planetary dynamics with close encounters (MERCURIUS)
-* High accuracy non-symplectic integrator with adaptive time-stepping (IAS15)
+* High accuracy non-symplectic integrators with adaptive time-stepping (IAS15, Gragg-Bulirsch-Stoer)
+* Can integrate arbitrary user-defined ODEs that are coupled to N-body dynamics for tides, spin, etc
 * Support for collisional/granular dynamics, various collision detection routines
 * The code is written entirely in C, conforms to the ISO standard C99 and can be used as a thread-safe shared library
 * Easy-to-use Python module, installation in 3 words: `pip install rebound`
