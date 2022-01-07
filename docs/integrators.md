@@ -228,11 +228,26 @@ The BS integrator tries to keep the error of each coordinate $y$ below $\epsilon
     !!! Info
         The code does not guarantee that the errors remain below the tolerances. In particular, note that BS is not a symplectic integrator which results in errors growing linearly in time (phase errors grow quadratically in time). It requires some experimentation to find the tolerances that offer the best compromise between accuracy and speed for your specific problem. 
 
+
+You can limit the timestep with both a maximum and minimum timestep:
+
+=== "C"
+    ```c
+    r->ri_bs.min_dt = 1e-5;
+    r->ri_bs.max_dt = 1e-2;
+    ```
+
+=== "Python"
+    ```python
+    sim.ri_bs.min_dt = 1e-5
+    sim.ri_bs.max_dt = 1e-2
+    ```
+
 Compared to the other integrators in REBOUND, BS can be used to integrate arbitrary ordinary differential equations (ODEs), not just the N-body problem. We expose an ODE-API in REBOUND which allows you to make use of this. User-defined ODEs are always integrated with BS. You can choose to integrate the N-body equations with BS as well, or any of the other integrators. 
 
 If you choose BS for the N-body equations, then BS will treat all ODEs (N-body + all user-defined ones) as one big system of coupled ODEs. This means your timestep will be set by either the N-body problem or the user-defined ODEs, whichever involves the shorter timescale.
 
-If you choose IAS15 or WHFast for the N-body equation but also have user-defined ODEs, then they cannot be treated as one big coupled system of ODEs anymore. In that case the N-body integration is done first. Then the user-defined ODEs are advanced to the exact same time as the N-body system. During the integration of the user-defined ODEs, the coordinates of the particles in the N-body simulation are assumed to be fixed at their final position and velocity. This introduces an error. However, if the system evolves adiabatically (the timescales in the user-defined ODEs are much longer than in the N-body problem), then the error will be small. 
+If you choose IAS15 or WHFast for the N-body equation but also have user-defined ODEs, then they cannot be treated as one big coupled system of ODEs anymore. In that case the N-body integration is done first. Then the user-defined ODEs are advanced to the exact same time as the N-body system using BS using whatever timestep is required to achieve the tolerance set in the `ri_bs` struct. During the integration of the user-defined ODEs, the coordinates of the particles in the N-body simulation are assumed to be fixed at their final position and velocity. This introduces an error. However, if the system evolves adiabatically (the timescales in the user-defined ODEs are much longer than in the N-body problem), then the error will be small. 
 
 The following code sets up a REBOUND simulation in which a harmonic oscillator is driven by the phase of a planet orbiting a star:
 
@@ -283,7 +298,6 @@ The following code sets up a REBOUND simulation in which a harmonic oscillator i
     ho.y[0] = 1.0                   # Initial conditions
     ho.y[1] = 0.0
     ```
-
 
 
 ## Mercurius
