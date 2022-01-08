@@ -320,7 +320,7 @@ static void nbody_derivatives(struct reb_ode* ode, double* const yDot, const dou
         // Not needed for first step. Accelerations already calculated. Just need to copy them
         reb_integrator_bs_update_particles(r, y);
         reb_update_acceleration(r);
-        if (r->N_var){ // Fore futre. Currently not implemented yet.
+        if (r->N_var){
             reb_calculate_acceleration_var(r);
         }
         // Calculate non-gravity accelerations. 
@@ -730,12 +730,6 @@ struct reb_ode* reb_create_ode(struct reb_simulation* r, unsigned int length){
 
 void reb_integrator_bs_part2(struct reb_simulation* r){
     struct reb_simulation_integrator_bs* ri_bs = &(r->ri_bs);
-    
-    if (r->var_config_N){
-        reb_error(r, "The BS integrator does currently not support variational equations.");
-        r->status = REB_EXIT_ERROR;
-        return; // Error
-    }
     
     int nbody_length = r->N*3*2;
     if (ri_bs->nbody_ode == NULL){ 
