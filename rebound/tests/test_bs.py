@@ -70,6 +70,36 @@ class TestIntegratorBS(unittest.TestCase):
         self.assertEqual(sim.particles[1].x, sim1.particles[1].x)
         self.assertEqual(sim.particles[2].vx, sim1.particles[2].vx)
         self.assertEqual(sim.t, sim1.t)
+    
+    def test_bs_change_particle_N(self):
+        sim = rebound.Simulation()
+        sim.integrator = "BS"
+        sim.add(m=1)
+        sim.add(m=1e-3,a=1,e=0.1)
+        sim.N_active = sim.N
+        for i in range(100):
+            sim.add(a=1.4+i*0.01)
+        sim.integrate(10)
+        for i in range(100):
+            sim.add(a=2.4+i*0.01)
+        sim.integrate(20)
+        for i in range(50):
+            sim.remove(i*2+2)
+        sim.integrate(20)
+        self.assertEqual(sim.N, 150+2)
+    
+    def test_bs_collide(self):
+        sim = rebound.Simulation()
+        sim.integrator = "BS"
+        sim.add(m=1,r=1,x=-3)
+        sim.add(m=1,r=1,x=3)
+        sim.collision = "direct"
+        sim.collision_resolve = "merge"
+        sim.integrate(20)
+        self.assertEqual(sim.N, 1)
+        self.assertEqual(sim.particles[0].m, 2.)
+        self.assertEqual(sim.particles[0].x, 0.)
+        self.assertEqual(sim.particles[0].vx, 0.)
 
 
 if __name__ == "__main__":
