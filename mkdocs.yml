@@ -104,7 +104,7 @@ nav:
     - "Integrating arbitrary ODEs":
       - c_examples/arbitrary_ode.md
       - ipython_examples/ChaoticHyperion.ipynb
-      - ipython_examples/IntegratingarbitraryODEs.ipynb
+      - ipython_examples/IntegratingArbitraryODEs.ipynb
     - "Granular dynamics":
       - c_examples/bouncing_balls.md
       - c_examples/bouncing_balls_corners.md
