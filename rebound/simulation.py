@@ -1759,7 +1759,10 @@ class Simulation(Structure):
             self.process_messages()
             raise SimulationError("An error occured during the integration.")
         if ret_value == 2:
-            raise NoParticles("No more particles left in simulation.")
+            if self._odes_N>0:
+                raise NoParticles("No particles found. Will exit. Use BS integrator to integrate user-defined ODEs without any particles present.");
+            else:
+                raise NoParticles("No more particles left in simulation.")
         if ret_value == 3:
             raise Encounter("Two particles had a close encounter (d<exit_min_distance).")
         if ret_value == 4:

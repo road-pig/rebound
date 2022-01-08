@@ -681,9 +681,16 @@ int reb_check_exit(struct reb_simulation* const r, const double tmax, double* la
         }
     }
 #ifndef MPI
-    if (r->N<=0){
-        reb_warning(r,"No particles found. Will exit.");
-        r->status = REB_EXIT_NOPARTICLES; // Exit now.
+    if (!r->N){
+        if (!r->odes_N){
+            reb_warning(r,"No particles found. Will exit.");
+            r->status = REB_EXIT_NOPARTICLES; // Exit now.
+        }else{
+            if (r->integrator != REB_INTEGRATOR_BS){
+                reb_warning(r,"No particles found. Will exit. Use BS integrator to integrate user-defined ODEs without any particles present.");
+                r->status = REB_EXIT_NOPARTICLES; // Exit now.
+            }
+        }
     }
 #else
     int status_max = 0;
