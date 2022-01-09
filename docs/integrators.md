@@ -206,7 +206,7 @@ The BS implementation in REBOUND can integrate first and second orer variational
 
 The BS integrator is particularly useful for short integrations where only medium accuracy is required. For long integrations a symplectic integrator such as WHFast performs better. For high accuracy integrations the IAS15 integrator performs better. Because BS is adaptive, it can handle close encounters. Currently a collision search is only performed after every timestep, i.e. not after a sub-timestep.
 
-The following code enables the BS integrator and sets both the relative and absolute tolerances to 0.0001:
+The following code enables the BS integrator and sets both the relative and absolute tolerances to 0.0001 (the default is $10^{-8}$):
 
 === "C"
     ```c
