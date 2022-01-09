@@ -477,10 +477,10 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
 
                 // estimate the error at the end of the step.
                 error = 0;
-                long int combined_length = 0;
+                //long int combined_length = 0;
                 for (int s=0; s < Ns; s++){
                     const int length = odes[s]->length;
-                    combined_length += length;
+                    //combined_length += length;
                     double * C = odes[s]->C;
                     double * scale = odes[s]->scale;
                     for (int j = 0; j < length; ++j) {
@@ -488,7 +488,8 @@ int reb_integrator_bs_step(struct reb_simulation* r, double dt){
                         error = MAX(error, e * e);
                     }
                 }
-                error = sqrt(error / combined_length);
+                // Note: Used to be: error = sqrt(error / combined_length). But for N-body applications it might be more consistent to use:
+                error = sqrt(error);
                 if (isnan(error)) {
                     reb_error(r, "NaN appearing during ODE integration.");
                     r->status = REB_EXIT_ERROR;
