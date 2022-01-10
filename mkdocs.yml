@@ -100,9 +100,11 @@ nav:
       - c_examples/prdrag.md
       - c_examples/circumplanetarydust.md
       - c_examples/planetary_migration.md
+      - c_examples/ode_coupled_to_nbody.md
       - ipython_examples/Forces.ipynb
     - "Integrating arbitrary ODEs":
       - c_examples/arbitrary_ode.md
+      - c_examples/ode_coupled_to_nbody.md
       - ipython_examples/ChaoticHyperion.ipynb
       - ipython_examples/IntegratingArbitraryODEs.ipynb
     - "Granular dynamics":

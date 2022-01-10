@@ -224,7 +224,7 @@ struct reb_ode{ // defines an ODE
     double* scale;
     double* C;      // Temporary internal array (extrapolation) 
     double** D;     // Temporary internal array (extrapolation) 
-    double* y1;     // Temporary internal array (state at end of step) 
+    double* y1;     // Temporary internal array (state during the step) 
     double* y0Dot;  // Temporary internal array (derivatives at beginning of step)
     double* yDot;   // Temporary internal array (derivatives)
     double* yTmp;   // Temporary internal array (midpoint method)
