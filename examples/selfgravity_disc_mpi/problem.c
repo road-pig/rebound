@@ -24,6 +24,7 @@
 void heartbeat(struct reb_simulation* const r);
 
 int main(int argc, char* argv[]){
+    printf("hello world");
     struct reb_simulation* const r = reb_create_simulation();
     // Setup constants
     r->integrator    = REB_INTEGRATOR_LEAPFROG;
