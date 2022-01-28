@@ -21,10 +21,65 @@
 #include "output.h"
 
 
+//load in the polynomials for the force
+int load_force_polynomial(long double coeffs[], char* filename, int n_terms){
+	FILE *fp;
+	char buffer[255];
+	fp = fopen(filename, "r");
+	char* endptr;
+	for(int i = 0; i < n_terms; i++){
+		fscanf(fp, "%s", buffer);
+		coeffs[i] = strtold(buffer, &endptr);
+		printf("%Lf", coeffs[i]);
+	}
+	fclose(fp);
+	return 0;
+}
+
+//force due to the magnet
+long double force(long double r, const long double coeffs[], int terms){
+    long double sum = 0;
+    for (int i = 0; i < terms; i++){
+        sum += coeffs[i] * powl(r, i);
+    }
+    return sum;
+}
+
+//load initial distributions
+int load_initial_data(char* filename, int length, double positions[]){
+	FILE *fp;
+	char buffer[255];
+	fp = fopen(filename, "r");
+	char* endptr;
+	for(int i = 0
+}	
+
 void heartbeat(struct reb_simulation* const r);
 
 int main(int argc, char* argv[]){
-    printf("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");
+	const char* FORCE_COEFFS_FILENAME = "forcecoeffs.csv"; //coefficients for force polynomial
+    const int TERMS = 26; //number of terms in force polynomial
+    const int INITIAL_DATA_LENGTH = 399460; //number of initial r values
+    const char* INITIAL_DATA_FILENAME = "initial_data.csv"; //initial r values
+    const int PARTICLES = 70; //number of particles to simulate
+    const int MESH_FINENESS = 3000; //dimensions of mesh (MESH_FINENESS * MESH_FINENESS)
+    const int M = 100000; //number of timesteps
+    const int N_THREADS = 6;
+
+    const long double VISCOSITY = 0.0010518; //dynamic viscosity of water
+    const long double RADIUS = 2e-3; //radius of particle
+    const long double DENSITY = 2260; //density of particles
+    const long double MASS = (4.0 / 3) * DENSITY * M_PI * pow(RADIUS, 3);
+    const long double CD = 6 * M_PI * VISCOSITY * RADIUS; //stokes drag
+    const long double TEMPERATURE = 28 + 273.15; //temperature
+    const long double KB = 1.38064852e-23; //boltzmann's constant
+    const long double RANDOM_COEFFICIENT = sqrt(2 * KB * TEMPERATURE / CD); //coefficient in front of the dW term
+    const int T_START = 0;
+    const int T_END = 1000;
+
+	long double *coeffs = (long double*) malloc(TERMS * sizeof(long double));
+	load_force_polynomial(coeffs, FORCE_COEFFS_FILENAME, 26);
+
     struct reb_simulation* const r = reb_create_simulation();
     // Setup constants
     r->integrator    = REB_INTEGRATOR_LEAPFROG;
