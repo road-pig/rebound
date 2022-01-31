@@ -30,7 +30,6 @@ int load_force_polynomial(long double coeffs[], char* filename, int n_terms){
 	for(int i = 0; i < n_terms; i++){
 		fscanf(fp, "%s", buffer);
 		coeffs[i] = strtold(buffer, &endptr);
-		printf("%Lf", coeffs[i]);
 	}
 	fclose(fp);
 	return 0;
@@ -46,39 +45,108 @@ long double force(long double r, const long double coeffs[], int terms){
 }
 
 //load initial distributions
-int load_initial_data(char* filename, int length, double positions[]){
+int load_initial_data(char* filename, long double positions[], int length){
 	FILE *fp;
-	char buffer[255];
+    char buffer[255];
+    long double r;
+    char* endptr;
 	fp = fopen(filename, "r");
-	char* endptr;
-	for(int i = 0
+    if(fp == NULL){
+        printf("die");
+        return 0;
+    }
+	for(int i = 0; i < length; i++){
+        fscanf(fp, "%s", buffer);
+        r = strtold(buffer, &endptr);
+        positions[i] = r;
+    }
+    fclose(fp);
+    return 1;
 }	
+
+//initialize positions of particles
+int generate_initial_positions(long double initial_data[], long double* positions[], int particles, int** mesh, int initial_data_length, long double radius){
+    long double r, theta, x, y;
+    int index;
+    for(int i = 0; i < particles; i++){
+        index = rand() % initial_data_length;
+        r = initial_data[index];
+        theta = ((long double) rand()) / RAND_MAX * 2 * M_PI;
+        x = r * cos(theta);
+        y = r * sin(theta);
+        do {
+            int a = 1500 + ((int) (x / radius));
+            int b = 1500 + ((int) (y / radius)) ;
+            if (a>=3000 || a<0 || b>=3000 || b<0)
+            {
+                printf ("segmentation fault %d %d %Lf %Lf\n", a, b, r, theta) ;
+                break;
+            }
+            if (mesh[a][b])
+            {}
+            else{
+                break;
+            } 
+            theta = rand() / RAND_MAX * 2 * M_PI;
+            x = r * cos(theta);
+            y = r * sin(theta);
+        } while (1) ;
+        
+        positions[i][0] = x;
+        positions[i][1] = y;
+    }
+    return 0;
+}
+
 
 void heartbeat(struct reb_simulation* const r);
 
 int main(int argc, char* argv[]){
-	const char* FORCE_COEFFS_FILENAME = "forcecoeffs.csv"; //coefficients for force polynomial
-    const int TERMS = 26; //number of terms in force polynomial
-    const int INITIAL_DATA_LENGTH = 399460; //number of initial r values
-    const char* INITIAL_DATA_FILENAME = "initial_data.csv"; //initial r values
-    const int PARTICLES = 70; //number of particles to simulate
-    const int MESH_FINENESS = 3000; //dimensions of mesh (MESH_FINENESS * MESH_FINENESS)
-    const int M = 100000; //number of timesteps
-    const int N_THREADS = 6;
+	char* FORCE_COEFFS_FILENAME = "forcecoeffs.csv"; //coefficients for force polynomial
+    int TERMS = 26; //number of terms in force polynomial
+    int INITIAL_DATA_LENGTH = 399460; //number of initial r values
+    char* INITIAL_DATA_FILENAME = "initial_data.csv"; //initial r values
+    int PARTICLES = 20000; //number of particles to simulate
+    int MESH_FINENESS = 3000; //dimensions of mesh (MESH_FINENESS * MESH_FINENESS)
+    int M = 100000; //number of timesteps
+    int N_THREADS = 6;
 
-    const long double VISCOSITY = 0.0010518; //dynamic viscosity of water
-    const long double RADIUS = 2e-3; //radius of particle
-    const long double DENSITY = 2260; //density of particles
-    const long double MASS = (4.0 / 3) * DENSITY * M_PI * pow(RADIUS, 3);
-    const long double CD = 6 * M_PI * VISCOSITY * RADIUS; //stokes drag
-    const long double TEMPERATURE = 28 + 273.15; //temperature
-    const long double KB = 1.38064852e-23; //boltzmann's constant
-    const long double RANDOM_COEFFICIENT = sqrt(2 * KB * TEMPERATURE / CD); //coefficient in front of the dW term
-    const int T_START = 0;
-    const int T_END = 1000;
+    long double VISCOSITY = 0.0010518; //dynamic viscosity of water
+    long double RADIUS = 75e-6; //radius of particle
+    long double DENSITY = 2260; //density of particles
+    long double MASS = (4.0 / 3) * DENSITY * M_PI * pow(RADIUS, 3);
+    long double CD = 6 * M_PI * VISCOSITY * RADIUS; //stokes drag
+    long double TEMPERATURE = 28 + 273.15; //temperature
+    long double KB = 1.38064852e-23; //boltzmann's constant
+    long double RANDOM_COEFFICIENT = sqrt(2 * KB * TEMPERATURE / CD); //coefficient in front of the dW term
+    int T_START = 0;
+    int T_END = 1000;
 
 	long double *coeffs = (long double*) malloc(TERMS * sizeof(long double));
 	load_force_polynomial(coeffs, FORCE_COEFFS_FILENAME, 26);
+
+    long double *initial_positions = (long double*) malloc(INITIAL_DATA_LENGTH * sizeof(long double));
+    load_initial_data(INITIAL_DATA_FILENAME, initial_positions, INITIAL_DATA_LENGTH);
+
+    //initialize 2d array for positions
+    long double** positions = (long double**) malloc(PARTICLES * sizeof(long double*));
+    for(int i = 0; i < PARTICLES; i++){
+        positions[i] = (long double*) malloc(2 * sizeof(long double));
+    }
+    //initialize 2d array for collision detection
+    int** mesh = (int**) malloc(MESH_FINENESS * sizeof(int*));
+    for(int i = 0; i < MESH_FINENESS; i++){
+        mesh[i] = (int*) malloc(MESH_FINENESS * sizeof(int));
+    }
+    //initialize to false
+    for (int i = 0; i < MESH_FINENESS; i++) {
+        for (int j = 0; j < MESH_FINENESS; j++) {
+            mesh[i][j] = 0;
+        }
+    }
+    //initialize positions
+    generate_initial_positions(initial_positions, positions, PARTICLES, mesh, INITIAL_DATA_LENGTH, RADIUS);
+    free(initial_positions); // free up memory since its not needed any more
 
     struct reb_simulation* const r = reb_create_simulation();
     // Setup constants
