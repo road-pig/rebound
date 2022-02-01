@@ -1217,7 +1217,7 @@ static void reb_calculate_acceleration_for_particle_from_cell(const struct reb_s
             }
         } else {
             double _r = sqrt(r2 + softening2);
-            double prefact = -G/(_r * _r * _r)*node->m;//*cyl_bessel_k(0, _r * CAPL_LENGTH); 
+            double prefact = -G/(_r * _r * _r)*node->m*cyl_bessel_k(0, _r * CAPL_LENGTH); 
 #ifdef QUADRUPOLE
             double qprefact = G/(_r*_r*_r*_r*_r);
             particles[pt].ax += qprefact*(dx*node->mxx + dy*node->mxy + dz*node->mxz); 

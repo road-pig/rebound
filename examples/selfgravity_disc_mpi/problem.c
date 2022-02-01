@@ -20,7 +20,7 @@
 #include "tools.h"
 #include "output.h"
 
-#define DT 0.01
+#define DT 0.005
 
 long double* coeffs;
 
@@ -106,7 +106,6 @@ int generate_initial_positions(long double initial_data[], long double* position
 //rng for brownian motion
 long double get_random(long double mu, long double sigma, long double coefficient)
 {
-    return 0.0;
     long double U1, U2, W, mult;
     long double X1;
 
@@ -234,6 +233,7 @@ int main(int argc, char* argv[]){
         pt.ax = 0;
         pt.ay = 0;
         pt.az = 0;
+        pt.r = 0.001;
         pt.m         = disc_mass/(double)N;
         reb_add(r, pt);
     }
