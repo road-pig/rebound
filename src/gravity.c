@@ -39,7 +39,10 @@
 #include "tree.h"
 #include "boundary.h"
 #include "integrator_mercurius.h"
+#include <boost/math/tr1.hpp>
 #define MAX(a, b) ((a) > (b) ? (a) : (b))    ///< Returns the maximum of a and b
+
+#define CAPL_LENGTH 368.3751861591355
 
 #ifdef MPI
 #include "communication_mpi.h"
@@ -1214,7 +1217,7 @@ static void reb_calculate_acceleration_for_particle_from_cell(const struct reb_s
             }
         } else {
             double _r = sqrt(r2 + softening2);
-            double prefact = -G/(_r*_r*_r)*node->m;
+            double prefact = -G/(_r * _r * _r)*node->m;//*cyl_bessel_k(0, _r * CAPL_LENGTH); 
 #ifdef QUADRUPOLE
             double qprefact = G/(_r*_r*_r*_r*_r);
             particles[pt].ax += qprefact*(dx*node->mxx + dy*node->mxy + dz*node->mxz); 

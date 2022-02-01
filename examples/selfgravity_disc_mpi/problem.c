@@ -20,6 +20,11 @@
 #include "tools.h"
 #include "output.h"
 
+#define DT 0.01
+
+long double* coeffs;
+
+long double RANDOM_COEFFICIENT;
 
 //load in the polynomials for the force
 int load_force_polynomial(long double coeffs[], char* filename, int n_terms){
@@ -98,6 +103,44 @@ int generate_initial_positions(long double initial_data[], long double* position
     return 0;
 }
 
+//rng for brownian motion
+long double get_random(long double mu, long double sigma, long double coefficient)
+{
+    return 0.0;
+    long double U1, U2, W, mult;
+    long double X1;
+
+    do
+    {
+        U1 = -1 + ((long double)rand() / RAND_MAX) * 2;
+        U2 = -1 + ((long double)rand() / RAND_MAX) * 2;
+        W = powl(U1, 2) + powl(U2, 2);
+    } while (W >= 1 || W == 0);
+
+    mult = sqrt((-2 * log(W)) / W);
+    X1 = U1 * mult;
+    return coefficient * (mu + sigma * (long double)X1);
+}
+
+void additional_forces(struct reb_simulation* const r){
+    long double VISCOSITY = 0.0010518; //dynamic viscosity of water
+    long double RADIUS = 75e-6; //radius of particle
+    long double CD = 6 * M_PI * VISCOSITY * RADIUS; //stokes drag
+    long double DENSITY = 2260.0; //density of particles
+    long double MASS = (4.0 / 3) * DENSITY * M_PI * pow(RADIUS, 3);
+
+    // Simplest velocity dependent drag force.
+    struct reb_particle* const particles = r->particles;
+    const int N = r->N;
+    for (int i=0;i<N;i++){
+
+        long double r = sqrt(particles[i].x * particles[i].x + particles[i].y * particles[i].y);
+        particles[i].ax += (double) ((get_random(0, sqrt(DT), RANDOM_COEFFICIENT) + (force(r, coeffs, 26) * particles[i].x / r) - (CD*particles[i].vx)) / MASS);
+        particles[i].ay += (double) ((get_random(0, sqrt(DT), RANDOM_COEFFICIENT) + (force(r, coeffs, 26) * particles[i].y / r) - (CD*particles[i].vy)) / MASS);
+        particles[i].az += (double) (-CD*particles[i].vz / MASS);
+    }
+}
+
 
 void heartbeat(struct reb_simulation* const r);
 
@@ -108,21 +151,20 @@ int main(int argc, char* argv[]){
     char* INITIAL_DATA_FILENAME = "initial_data.csv"; //initial r values
     int PARTICLES = 20000; //number of particles to simulate
     int MESH_FINENESS = 3000; //dimensions of mesh (MESH_FINENESS * MESH_FINENESS)
-    int M = 100000; //number of timesteps
-    int N_THREADS = 6;
 
     long double VISCOSITY = 0.0010518; //dynamic viscosity of water
     long double RADIUS = 75e-6; //radius of particle
-    long double DENSITY = 2260; //density of particles
+    long double DENSITY = 2260.0; //density of particles
     long double MASS = (4.0 / 3) * DENSITY * M_PI * pow(RADIUS, 3);
     long double CD = 6 * M_PI * VISCOSITY * RADIUS; //stokes drag
     long double TEMPERATURE = 28 + 273.15; //temperature
     long double KB = 1.38064852e-23; //boltzmann's constant
-    long double RANDOM_COEFFICIENT = sqrt(2 * KB * TEMPERATURE / CD); //coefficient in front of the dW term
-    int T_START = 0;
+    RANDOM_COEFFICIENT = sqrt(2 * KB * TEMPERATURE / CD); //coefficient in front of the dW term
+    double COEFF = 17589.3;
     int T_END = 1000;
+    printf("test\n");
 
-	long double *coeffs = (long double*) malloc(TERMS * sizeof(long double));
+    coeffs = (long double*) malloc(TERMS * sizeof(long double));
 	load_force_polynomial(coeffs, FORCE_COEFFS_FILENAME, 26);
 
     long double *initial_positions = (long double*) malloc(INITIAL_DATA_LENGTH * sizeof(long double));
@@ -147,6 +189,7 @@ int main(int argc, char* argv[]){
     //initialize positions
     generate_initial_positions(initial_positions, positions, PARTICLES, mesh, INITIAL_DATA_LENGTH, RADIUS);
     free(initial_positions); // free up memory since its not needed any more
+    free(mesh);
 
     struct reb_simulation* const r = reb_create_simulation();
     // Setup constants
@@ -154,48 +197,49 @@ int main(int argc, char* argv[]){
     r->gravity    = REB_GRAVITY_TREE;
     r->boundary    = REB_BOUNDARY_OPEN;
     r->opening_angle2    = 1.5;        // This constant determines the accuracy of the tree code gravity estimate.
-    r->G         = 1;        
-    r->softening     = 0.02;        // Gravitational softening length
-    r->dt         = 3e-2;        // Timestep
-    const double boxsize = 10.2;
+    r->G         = COEFF;        
+    r->softening     = 0.0075163;        // Gravitational softening length
+    r->dt         = DT;        // Timestep
+    r->collision = REB_COLLISION_TREE;
+    r->collision_resolve = reb_collision_resolve_hardsphere; 
+    r->coefficient_of_restitution = 0;
+    r->additional_forces = additional_forces;
+    const double boxsize = 0.10;
     // Setup root boxes for gravity tree.
     // Here, we use 2x2=4 root boxes (each with length 'boxsize')
     // This allows you to use up to 4 MPI nodes.
     reb_configure_box(r,boxsize,2,2,1);
-
     // Initialize MPI
     // This can only be done after reb_configure_box.
     reb_mpi_init(r);
+
 
     // Setup particles only on master node
     // In the first timestep, the master node will 
     // distribute particles to other nodes. 
     // Note that this is not the most efficient method
     // for very large particle numbers.
-    double disc_mass = 2e-1/r->mpi_num;    // Total disc mass
-    int N = 10000/r->mpi_num;            // Number of particles
+    double disc_mass = MASS * PARTICLES/r->mpi_num;    // Total disc mass
+    int N = PARTICLES/r->mpi_num;            // Number of particles
     // Initial conditions
-    struct reb_particle star = {0};
-    star.m         = 1;
-    if (r->mpi_id==0){
-        reb_add(r, star);
-    }
+    
     for (int i=0;i<N;i++){
         struct reb_particle pt = {0};
-        double a    = reb_random_powerlaw(r, boxsize/10.,boxsize/2./1.2,-1.5);
-        double phi     = reb_random_uniform(r, 0,2.*M_PI);
-        pt.x         = a*cos(phi);
-        pt.y         = a*sin(phi);
-        pt.z         = a*reb_random_normal(r, 0.001);
-        double mu     = star.m + disc_mass * (pow(a,-3./2.)-pow(boxsize/10.,-3./2.))/(pow(boxsize/2./1.2,-3./2.)-pow(boxsize/10.,-3./2.));
-        double vkep     = sqrt(r->G*mu/a);
-        pt.vx         =  vkep * sin(phi);
-        pt.vy         = -vkep * cos(phi);
-        pt.vz         = 0;
+        pt.x         = (double) positions[i][0];
+        pt.y         = (double) positions[i][1];
+        pt.z         = 0.0;
+        pt.vx         =  0.0;
+        pt.vy         =  0.0;
+        pt.vz         = 0.0;
+        pt.ax = 0;
+        pt.ay = 0;
+        pt.az = 0;
         pt.m         = disc_mass/(double)N;
         reb_add(r, pt);
     }
+    printf("death\n");
     r->heartbeat = heartbeat;
+
 
 #ifdef OPENGL
     // Hack to artificially increase particle array.
@@ -205,7 +249,7 @@ int main(int argc, char* argv[]){
 #endif // OPENGL
     
     // Start the integration
-    reb_integrate(r, INFINITY);
+    reb_integrate(r, T_END);
 
     // Cleanup
     reb_mpi_finalize(r);
