@@ -148,11 +148,11 @@ int main(int argc, char* argv[]){
     int TERMS = 26; //number of terms in force polynomial
     int INITIAL_DATA_LENGTH = 399460; //number of initial r values
     char* INITIAL_DATA_FILENAME = "initial_data.csv"; //initial r values
-    int PARTICLES = 20000; //number of particles to simulate
+    int PARTICLES = 70; //number of particles to simulate
     int MESH_FINENESS = 3000; //dimensions of mesh (MESH_FINENESS * MESH_FINENESS)
 
     long double VISCOSITY = 0.0010518; //dynamic viscosity of water
-    long double RADIUS = 75e-6; //radius of particle
+    long double RADIUS = 1000e-6; //radius of particle
     long double DENSITY = 2260.0; //density of particles
     long double MASS = (4.0 / 3) * DENSITY * M_PI * pow(RADIUS, 3);
     long double CD = 6 * M_PI * VISCOSITY * RADIUS; //stokes drag
